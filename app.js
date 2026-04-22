@@ -11,12 +11,13 @@ const edgeTarget = document.getElementById('edgeTarget');
 const edgeLabel = document.getElementById('edgeLabel');
 const startNode = document.getElementById('startNode');
 const runOutput = document.getElementById('runOutput');
+const NODE_COUNTER_START = 1;
 
 const state = {
   nodes: [],
   edges: [],
   selectedId: null,
-  counter: 1,
+  counter: NODE_COUNTER_START,
 };
 
 const nodeTemplates = {
@@ -168,14 +169,34 @@ function parseRouteMap(routeMapText) {
     .map((line) => line.trim())
     .filter(Boolean)
     .forEach((line) => {
-      const [key, value] = line.split('=').map((part) => part.trim());
+      const separatorIndex = line.indexOf('=');
+      if (separatorIndex === -1) return;
+      const key = line.slice(0, separatorIndex).trim();
+      const value = line.slice(separatorIndex + 1).trim();
       if (key && value) map[key] = value;
     });
   return map;
 }
 
 function fillPromptVariables(template, context) {
-  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => context[key] ?? '');
+  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => {
+    if (context[key] === undefined || context[key] === null) return `__MISSING_${key}__`;
+    return String(context[key]);
+  });
+}
+
+function buildSafePayload(values) {
+  const variables = Object.fromEntries(
+    Object.entries(values).filter(([key]) => /^[a-zA-Z0-9_]+$/.test(key)),
+  );
+
+  return { variables };
+}
+
+function findDefaultStartNode() {
+  return state.nodes.find((n) => n.type === 'user_input')
+    || state.nodes.find((n) => n.type === 'text_input')
+    || state.nodes[0];
 }
 
 async function runWorkflow() {
@@ -189,7 +210,7 @@ async function runWorkflow() {
   const selectedStart = startNode.value;
   let current = selectedStart
     ? state.nodes.find((n) => n.id === selectedStart)
-    : state.nodes.find((n) => n.type === 'user_input' || n.type === 'text_input') || state.nodes[0];
+    : findDefaultStartNode();
 
   if (!current) {
     runOutput.textContent = 'No nodes to run.';
@@ -220,7 +241,10 @@ async function runWorkflow() {
           const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: values.prompt || current.content, values }),
+            body: JSON.stringify({
+              prompt: values.prompt || current.content,
+              ...buildSafePayload(values),
+            }),
           });
           const text = await response.text();
           values.ai_result = text;

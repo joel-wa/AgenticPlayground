@@ -16,9 +16,9 @@ A lightweight visual workflow playground built with plain HTML/CSS/JS.
 
 ## Run
 
-Open `/home/runner/work/AgenticPlayground/AgenticPlayground/index.html` in a browser.
+Open `index.html` in a browser.
 
 ## Backend placeholder
 
-Use `/home/runner/work/AgenticPlayground/AgenticPlayground/backend` to add your server implementation.
+Use `backend/` to add your server implementation.
 A minimal example is available at `backend/server.example.js`.
