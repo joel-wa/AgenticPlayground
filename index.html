@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Playground</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Agentic Playground</h1>
+    <p>Lightweight visual workflow editor</p>
+  </header>
+
+  <main>
+    <aside id="palette">
+      <h2>Nodes</h2>
+      <button class="add-node" data-type="user_input">User Input</button>
+      <button class="add-node" data-type="text_input">Text Input</button>
+      <button class="add-node" data-type="prompt_builder">Prompt Builder</button>
+      <button class="add-node" data-type="ai_processing">AI Processing</button>
+      <button class="add-node" data-type="route">Route (Multi-path)</button>
+
+      <h2>Connect</h2>
+      <label for="edgeSource">From</label>
+      <select id="edgeSource"></select>
+      <label for="edgeTarget">To</label>
+      <select id="edgeTarget"></select>
+      <label for="edgeLabel">Condition/Path Label</label>
+      <input id="edgeLabel" type="text" placeholder="e.g. A, B, C" />
+      <button id="createEdge">Create Link</button>
+
+      <h2>Run</h2>
+      <label for="startNode">Start Node</label>
+      <select id="startNode"></select>
+      <button id="runFlow">Run Workflow</button>
+      <pre id="runOutput"></pre>
+    </aside>
+
+    <section id="workspace-wrapper">
+      <svg id="connections"></svg>
+      <div id="workspace" aria-label="Workflow canvas"></div>
+    </section>
+
+    <aside id="editor">
+      <h2>Node Editor</h2>
+      <p id="editorEmpty">Select a node to edit settings.</p>
+      <form id="nodeForm" hidden>
+        <div>
+          <label for="nodeTitle">Title</label>
+          <input id="nodeTitle" type="text" />
+        </div>
+        <div>
+          <label for="nodeContent">Content / Value</label>
+          <textarea id="nodeContent" rows="4"></textarea>
+        </div>
+        <div>
+          <label for="nodeUrl">Server URL (AI Node)</label>
+          <input id="nodeUrl" type="url" placeholder="https://your-server/api" />
+        </div>
+        <div>
+          <label for="nodeRouteMap">Route map (Route Node)</label>
+          <textarea id="nodeRouteMap" rows="4" placeholder='A=pathA\nB=pathB'></textarea>
+        </div>
+        <button type="submit">Save Node</button>
+      </form>
+
+      <h3>Prompt Variables</h3>
+      <p>Use placeholders like <code>{toollist}</code> in Prompt Builder nodes.</p>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
