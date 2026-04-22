@@ -401,6 +401,10 @@ function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPor
 // ══════════════════════════════════════════════════════
 // EXECUTION ENGINE
 // ══════════════════════════════════════════════════════
+function resolveTemplate(str, vars) {
+  return String(str || "").replace(/\{(\w+)\}/g, (_, name) => vars[name] ?? `{${name}}`);
+}
+
 async function execNode(node, inputs, globalVars, log, defaultModel) {
   log(`Running ${TYPE_META[node.type].label}`, "info");
   switch (node.type) {
@@ -420,7 +424,8 @@ async function execNode(node, inputs, globalVars, log, defaultModel) {
     case "aiNode": {
       const prompt    = inputs["in"] || "(no input)";
       const model     = node.data.model || defaultModel || MODELS[1];
-      const serverUrl = (node.data.serverUrl || "").trim();
+      const serverUrl = resolveTemplate((node.data.serverUrl || "").trim(), globalVars);
+      const system    = resolveTemplate(node.data.systemPrompt || "You are helpful.", globalVars);
       if (!serverUrl) {
         log("⚠ No server URL set on AI node", "warn");
         return { out: "[Error] No server URL configured on this AI node.", err: "missing_url" };
@@ -433,7 +438,7 @@ async function execNode(node, inputs, globalVars, log, defaultModel) {
           body: JSON.stringify({
             prompt,
             model,
-            system:      node.data.systemPrompt || "You are helpful.",
+            system,
             max_tokens:  node.data.maxTokens || 1000,
             temperature: node.data.temperature ?? 0.7,
           }),
