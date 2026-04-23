@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
+import os
 
 app = FastAPI(title="AgenticPlayground API", version="0.1.0")
 
@@ -16,7 +18,8 @@ app.add_middleware(
 
 
 
-GEMINI_API_KEY = "AIzaSyA9d8YKCgIIN_wu9GPKYZUsJcexX4CL3tY" # Replace with environment variable for security
+load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 

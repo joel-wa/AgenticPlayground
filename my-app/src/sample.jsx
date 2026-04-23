@@ -75,23 +75,33 @@ function getPorts(node) {
   }
 }
 
-function nodeHeight(node) {
+function nodeHeight(node, result) {
   const { inputs, outputs } = getPorts(node);
   const maxPorts = Math.max(inputs.length, outputs.length, 1);
-  const base = {
+  let base = {
     userInput: 92, textInput: 98, promptBuilder: 112,
     aiNode: 158, output: 64, note: 104,
     branch: 52 + Math.max(1, (node.data?.conditions?.length || 1) + 1) * 34,
   }[node.type] || 80;
+
+  if (node.type === "output" && result !== undefined && result !== null) {
+    const text = String(result);
+    const lines = text.split("\n").length;
+    const approxLines = Math.ceil(text.length / 48);
+    const visibleLines = Math.min(10, Math.max(lines, approxLines));
+    const contentHeight = 28 + visibleLines * 18;
+    base = Math.max(base, contentHeight);
+  }
+
   return HEADER_H + Math.max(base, maxPorts * 30 + 20) + 8;
 }
 
-function portXY(node, portId, side) {
+function portXY(node, portId, side, result) {
   const { inputs, outputs } = getPorts(node);
   const list = side === "in" ? inputs : outputs;
   const idx = list.findIndex(p => p.id === portId);
   if (idx === -1) return { x: node.position.x, y: node.position.y };
-  const h = nodeHeight(node);
+  const h = nodeHeight(node, result);
   const inner = h - HEADER_H - 8;
   const spacing = inner / (list.length + 1);
   const y = node.position.y + HEADER_H + 4 + spacing * (idx + 1);
@@ -274,7 +284,7 @@ function OutputContent({ result }) {
   return (
     <div style={{ padding: "8px 12px 10px" }}>
       {result !== undefined && result !== null ? (
-        <div style={{ padding: "8px 10px", background: "rgba(251,191,36,0.07)", borderRadius: 5, fontSize: 11, color: "#fde68a", maxHeight: 72, overflowY: "auto", lineHeight: 1.5, wordBreak: "break-word", border: "1px solid rgba(251,191,36,0.12)" }}>
+        <div style={{ padding: "8px 10px", background: "rgba(251,191,36,0.07)", borderRadius: 5, fontSize: 11, color: "#fde68a", maxHeight: 160, overflowY: "auto", whiteSpace: "pre-wrap", lineHeight: 1.5, wordBreak: "break-word", border: "1px solid rgba(251,191,36,0.12)" }}>
           {String(result)}
         </div>
       ) : (
@@ -304,7 +314,7 @@ function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPor
   const meta = TYPE_META[node.type];
   const color = meta.color;
   const { inputs, outputs } = getPorts(node);
-  const h = nodeHeight(node);
+  const h = nodeHeight(node, result);
   const st = status || "idle";
 
   const borderColor = { idle: selected ? color : "rgba(255,255,255,0.1)", running: color, done: "#22c55e", error: "#ef4444" }[st];
@@ -362,7 +372,7 @@ function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPor
 
       {/* Input ports */}
       {inputs.map(port => {
-        const { y } = portXY(node, port.id, "in");
+        const { y } = portXY(node, port.id, "in", result);
         const py = y - node.position.y - PORT_R;
         return (
           <div key={port.id} style={{ position: "absolute", left: -(PORT_R + 1), top: py, zIndex: 10 }}>
@@ -379,7 +389,7 @@ function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPor
 
       {/* Output ports */}
       {outputs.map(port => {
-        const { y } = portXY(node, port.id, "out");
+        const { y } = portXY(node, port.id, "out", result);
         const py = y - node.position.y - PORT_R;
         const isElse = port.id === "_else";
         return (
@@ -786,7 +796,7 @@ export default function FlowForge() {
   const pendingPath = conn ? (() => {
     const n = nodes.find(x => x.id === conn.nodeId);
     if (!n) return null;
-    const sp = portXY(n, conn.portId, conn.side);
+    const sp = portXY(n, conn.portId, conn.side, nodeResult[n.id]);
     const [x1, y1, x2, y2] = conn.side === "out"
       ? [sp.x, sp.y, mouse.x, mouse.y]
       : [mouse.x, mouse.y, sp.x, sp.y];
@@ -847,7 +857,7 @@ export default function FlowForge() {
               const minX = Math.min(...nodes.map(n => n.position.x));
               const minY = Math.min(...nodes.map(n => n.position.y));
               const maxX = Math.max(...nodes.map(n => n.position.x + NODE_W));
-              const maxY = Math.max(...nodes.map(n => n.position.y + nodeHeight(n)));
+              const maxY = Math.max(...nodes.map(n => n.position.y + nodeHeight(n, nodeResult[n.id])));
               const cw = r.width - PAD * 2, ch = r.height - PAD * 2;
               const fw = cw / (maxX - minX || 1), fh = ch / (maxY - minY || 1);
               const s = Math.max(0.2, Math.min(1.8, Math.min(fw, fh)));
@@ -904,8 +914,8 @@ export default function FlowForge() {
                   const sn = nodes.find(n => n.id === edge.source);
                   const tn = nodes.find(n => n.id === edge.target);
                   if (!sn || !tn) return null;
-                  const sp = portXY(sn, edge.sourceHandle, "out");
-                  const tp = portXY(tn, edge.targetHandle, "in");
+                  const sp = portXY(sn, edge.sourceHandle, "out", nodeResult[sn.id]);
+                  const tp = portXY(tn, edge.targetHandle, "in", nodeResult[tn.id]);
                   const c = TYPE_META[sn.type].color;
                   const active = nodeStatus[sn.id] === "done";
                   const d = bezier(sp.x, sp.y, tp.x, tp.y);
