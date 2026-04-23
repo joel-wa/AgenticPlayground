@@ -33,7 +33,7 @@ def generate_gemini_response(prompt_text):
     config = types.GenerateContentConfig(
         # Remove thinking_level if your model/SDK version doesn't support it directly
         thinking_config=types.ThinkingConfig(
-            thinking_level="high",
+            thinking_level="low",
         ),
     )
 
@@ -62,21 +62,26 @@ async def health_check():
 
 @app.post("/api/chat")
 async def chat(request: Request):
-    body = await request.body()
-    if body:
-        content_type = request.headers.get("content-type", "")
-        if "application/json" in content_type:
-            try:
-                payload = await request.json()
-            except Exception:
-                payload = body.decode(errors="replace")
-        else:
-            payload = body.decode(errors="replace")
-    else:
-        payload = None
+    payload = None
+    try:
+        payload = await request.json()
+    except Exception:
+        body = await request.body()
+        payload = body.decode(errors="replace") if body else None
 
     print("Received /api/chat payload:", payload)
-    return {"message": "hello", "payload": payload}
+
+    if isinstance(payload, dict):
+        prompt_text = payload.get("prompt", "")
+        system_text = payload.get("system")
+        if system_text:
+            prompt_text = f"{system_text}\n\n{prompt_text}"
+
+        if prompt_text:
+            gemini_response = generate_gemini_response(prompt_text)
+            return {"message":gemini_response, "response": gemini_response}
+
+    return {"message": "invalid payload", "payload": payload}
 
 
 if __name__ == "__main__":
