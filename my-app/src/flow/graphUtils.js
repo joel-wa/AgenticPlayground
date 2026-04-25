@@ -8,14 +8,15 @@ export function nodeHeight(node, result) {
   const { inputs, outputs } = getPorts(node);
   const maxPorts = Math.max(inputs.length, outputs.length, 1);
   let base = {
-    userInput: 92,
-    textInput: 98,
-    promptBuilder: 112,
-    aiNode: 158,
-    output: 64,
-    note: 104,
+    userInput: 128,
+    textInput: 106,
+    promptBuilder: 140,
+    aiNode: 260,
+    output: 72,
+    note: 110,
+    setGlobal: 128,
     branch: 52 + Math.max(1, (node.data?.conditions?.length || 1) + 1) * 34,
-  }[node.type] || 80;
+  }[node.type] || 90;
 
   if (node.type === "output" && result !== undefined && result !== null) {
     const text = String(result);
@@ -24,6 +25,10 @@ export function nodeHeight(node, result) {
     const visibleLines = Math.min(10, Math.max(lines, approxLines));
     const contentHeight = 28 + visibleLines * 18;
     base = Math.max(base, contentHeight);
+  }
+
+  if (node.type === "aiNode" && result !== undefined && result !== null) {
+    base = Math.max(base, 340);
   }
 
   return 42 + Math.max(base, maxPorts * 30 + 20) + 8;

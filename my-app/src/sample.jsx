@@ -70,7 +70,7 @@ function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPor
       </div>
 
       {/* Content */}
-      <div onMouseDown={e => e.stopPropagation()}>
+      <div onMouseDown={e => e.stopPropagation()} style={{ height: h - HEADER_H, overflow: "hidden" }}>
         <NodeContent node={node} onChange={onDataChange} result={result} status={st} defaultModel={defaultModel} />
       </div>
 
@@ -339,10 +339,35 @@ export default function FlowForge() {
     const inMap = {};
     edgesSnap.forEach(e => { if (!inMap[e.target]) inMap[e.target] = []; inMap[e.target].push(e); });
 
-    // Topological sort
+    // Build augmented edge list: add virtual ordering edges from each setGlobal node
+    // to every node that uses its variable implicitly (no explicit connecting edge).
+    // This ensures setGlobal always runs before the nodes that read its variable via globalVars.
+    const augEdges = [...edgesSnap];
+    nodesSnap.filter(n => n.type === "setGlobal").forEach(setter => {
+      const key = (setter.data?.key || "").trim();
+      if (!key) return;
+      const pattern = `{${key}}`;
+      nodesSnap.forEach(target => {
+        if (target.id === setter.id) return;
+        const alreadyConnected = augEdges.some(e => e.source === setter.id && e.target === target.id);
+        if (alreadyConnected) return;
+        let usesVar = false;
+        if (target.type === "promptBuilder") {
+          usesVar = (target.data?.template || "").includes(pattern);
+        } else if (target.type === "aiNode") {
+          usesVar = (target.data?.systemPrompt || "").includes(pattern) ||
+                    (target.data?.serverUrl || "").includes(pattern);
+        }
+        if (usesVar) {
+          augEdges.push({ id: `__v:${setter.id}:${target.id}`, source: setter.id, target: target.id });
+        }
+      });
+    });
+
+    // Topological sort (use augEdges so implicit setGlobal deps are respected)
     const inDeg = {};
     nodesSnap.forEach(n => inDeg[n.id] = 0);
-    edgesSnap.forEach(e => inDeg[e.target] = (inDeg[e.target] || 0) + 1);
+    augEdges.forEach(e => inDeg[e.target] = (inDeg[e.target] || 0) + 1);
     const queue = nodesSnap.filter(n => inDeg[n.id] === 0);
     const order = [];
     const seen = new Set();
@@ -350,7 +375,7 @@ export default function FlowForge() {
       const n = queue.shift();
       if (seen.has(n.id)) continue;
       seen.add(n.id); order.push(n);
-      edgesSnap.filter(e => e.source === n.id).forEach(e => {
+      augEdges.filter(e => e.source === n.id).forEach(e => {
         if (--inDeg[e.target] === 0) { const t = nodesSnap.find(x => x.id === e.target); if (t) queue.push(t); }
       });
     }
