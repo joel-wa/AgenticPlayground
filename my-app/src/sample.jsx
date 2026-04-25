@@ -346,20 +346,22 @@ export default function FlowForge() {
     nodesSnap.filter(n => n.type === "setGlobal").forEach(setter => {
       const key = (setter.data?.key || "").trim();
       if (!key) return;
-      const pattern = `{${key}}`;
+      // Escape the key for use in a regex and match the exact token {key} (not a substring of another var)
+      const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const varRegex = new RegExp(`\\{${escaped}\\}`);
+      const textContainsVar = str => varRegex.test(str || "");
       nodesSnap.forEach(target => {
         if (target.id === setter.id) return;
         const alreadyConnected = augEdges.some(e => e.source === setter.id && e.target === target.id);
         if (alreadyConnected) return;
         let usesVar = false;
         if (target.type === "promptBuilder") {
-          usesVar = (target.data?.template || "").includes(pattern);
+          usesVar = textContainsVar(target.data?.template);
         } else if (target.type === "aiNode") {
-          usesVar = (target.data?.systemPrompt || "").includes(pattern) ||
-                    (target.data?.serverUrl || "").includes(pattern);
+          usesVar = textContainsVar(target.data?.systemPrompt) || textContainsVar(target.data?.serverUrl);
         }
         if (usesVar) {
-          augEdges.push({ id: `__v:${setter.id}:${target.id}`, source: setter.id, target: target.id });
+          augEdges.push({ id: `__virtual_ordering__${setter.id}__${target.id}`, source: setter.id, target: target.id });
         }
       });
     });
