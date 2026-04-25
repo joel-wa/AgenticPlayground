@@ -1,4 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { getPorts, TYPE_META, defaultData, MODELS } from "./flow/nodeTypes";
+import { SS } from "./flow/styles";
+import NodeContent from "./flow/NodeContent";
+import { execNode } from "./flow/executor";
+import { nodeHeight, portXY, bezier, snap, uid, eid, buildInitialGraph } from "./flow/graphUtils";
 
 // ══════════════════════════════════════════════════════
 // CONSTANTS
@@ -8,304 +13,9 @@ const HEADER_H = 42;
 const PORT_R   = 6;
 const GRID     = 20;
 
-const MODELS = [
-  "claude-opus-4-5",
-  "claude-sonnet-4-5",
-  "claude-3-5-sonnet-20241022",
-  "claude-3-haiku-20240307",
-];
-
-const MATCH_MODES = [
-  { value: "contains", label: "contains" },
-  { value: "equals",   label: "equals"   },
-  { value: "starts",   label: "starts"   },
-  { value: "ends",     label: "ends"     },
-  { value: "regex",    label: "regex"    },
-];
-
-const TYPE_META = {
-  userInput:     { label: "User Input",     icon: "⌨",  color: "#22d3ee" },
-  textInput:     { label: "Text",           icon: "T",  color: "#34d399" },
-  promptBuilder: { label: "Prompt Builder", icon: "{}",  color: "#fb923c" },
-  aiNode:        { label: "AI Process",     icon: "◈",  color: "#a78bfa" },
-  branch:        { label: "Branch",         icon: "⑂",  color: "#f472b6" },
-  output:        { label: "Output",         icon: "◎",  color: "#fbbf24" },
-  note:          { label: "Note",           icon: "✎",  color: "#64748b" },
-};
-
-// ══════════════════════════════════════════════════════
-// PORT + GEOMETRY UTILS
-// ══════════════════════════════════════════════════════
-function getPorts(node) {
-  switch (node.type) {
-    case "userInput":
-      return { inputs: [], outputs: [{ id: "out", label: "text" }] };
-    case "textInput":
-      return { inputs: [], outputs: [{ id: "out", label: "text" }] };
-    case "promptBuilder": {
-      const vars = [...new Set(
-        (node.data.template || "").match(/\{(\w+)\}/g)?.map(m => m.slice(1, -1)) || []
-      )];
-      return {
-        inputs: vars.map(v => ({ id: `v:${v}`, label: v })),
-        outputs: [{ id: "out", label: "prompt" }],
-      };
-    }
-    case "aiNode":
-      return {
-        inputs:  [{ id: "in", label: "prompt" }],
-        outputs: [{ id: "out", label: "response" }, { id: "err", label: "error" }],
-      };
-    case "branch": {
-      const conds = node.data.conditions || [];
-      return {
-        inputs:  [{ id: "in", label: "value" }],
-        outputs: [
-          ...conds.map(c => ({ id: c.id, label: c.label })),
-          { id: "_else", label: "else" },
-        ],
-      };
-    }
-    case "output":
-      return { inputs: [{ id: "in", label: "value" }], outputs: [] };
-    case "note":
-      return { inputs: [], outputs: [] };
-    default:
-      return { inputs: [], outputs: [] };
-  }
-}
-
-function nodeHeight(node, result) {
-  const { inputs, outputs } = getPorts(node);
-  const maxPorts = Math.max(inputs.length, outputs.length, 1);
-  let base = {
-    userInput: 92, textInput: 98, promptBuilder: 112,
-    aiNode: 158, output: 64, note: 104,
-    branch: 52 + Math.max(1, (node.data?.conditions?.length || 1) + 1) * 34,
-  }[node.type] || 80;
-
-  if (node.type === "output" && result !== undefined && result !== null) {
-    const text = String(result);
-    const lines = text.split("\n").length;
-    const approxLines = Math.ceil(text.length / 48);
-    const visibleLines = Math.min(10, Math.max(lines, approxLines));
-    const contentHeight = 28 + visibleLines * 18;
-    base = Math.max(base, contentHeight);
-  }
-
-  return HEADER_H + Math.max(base, maxPorts * 30 + 20) + 8;
-}
-
-function portXY(node, portId, side, result) {
-  const { inputs, outputs } = getPorts(node);
-  const list = side === "in" ? inputs : outputs;
-  const idx = list.findIndex(p => p.id === portId);
-  if (idx === -1) return { x: node.position.x, y: node.position.y };
-  const h = nodeHeight(node, result);
-  const inner = h - HEADER_H - 8;
-  const spacing = inner / (list.length + 1);
-  const y = node.position.y + HEADER_H + 4 + spacing * (idx + 1);
-  const x = side === "in" ? node.position.x : node.position.x + NODE_W;
-  return { x, y };
-}
-
-function bezier(x1, y1, x2, y2) {
-  const dx = Math.max(Math.abs(x2 - x1) * 0.55, 50);
-  return `M ${x1},${y1} C ${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
-}
-
-function snap(v) { return Math.round(v / GRID) * GRID; }
-
-// ══════════════════════════════════════════════════════
-// DEFAULT DATA
-// ══════════════════════════════════════════════════════
-function defaultData(type) {
-  switch (type) {
-    case "userInput":     return { label: "User Input", value: "" };
-    case "textInput":     return { content: "Static text here..." };
-    case "promptBuilder": return { template: "Context: {context}\n\nTask: {task}" };
-    case "aiNode":        return { serverUrl: "", systemPrompt: "You are a helpful assistant.", maxTokens: 1000, model: "", temperature: 0.7 };
-    case "branch":        return { conditions: [{ id: "b1", label: "Path A", match: "yes", mode: "contains" }, { id: "b2", label: "Path B", match: "no", mode: "contains" }] };
-    case "output":        return { label: "Result" };
-    case "note":          return { text: "Add notes here…" };
-    default:              return {};
-  }
-}
-
-let _c = 100;
-const uid = () => `n${++_c}`;
-const eid = () => `e${++_c}`;
-
-// ══════════════════════════════════════════════════════
-// SHARED STYLES
-// ══════════════════════════════════════════════════════
-const SS = {
-  input: {
-    width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
-    borderRadius: 5, color: "#cbd5e1", padding: "5px 8px", fontSize: 11.5, outline: "none",
-    fontFamily: "'IBM Plex Mono', monospace", boxSizing: "border-box",
-  },
-  select: {
-    width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)",
-    borderRadius: 5, color: "#cbd5e1", padding: "5px 8px", fontSize: 11, outline: "none",
-    fontFamily: "'IBM Plex Mono', monospace", boxSizing: "border-box", cursor: "pointer",
-  },
-  btn: {
-    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 5, color: "#94a3b8", padding: "4px 10px", cursor: "pointer",
-    fontSize: 11, fontFamily: "'IBM Plex Mono', monospace",
-  },
-  label: { fontSize: 9.5, color: "#475569", marginBottom: 4, letterSpacing: "0.08em", display: "block" },
-};
-
 // ══════════════════════════════════════════════════════
 // NODE CONTENT RENDERERS
 // ══════════════════════════════════════════════════════
-function UserInputContent({ data, onChange }) {
-  return (
-    <div style={{ padding: "8px 12px 10px" }}>
-      <span style={SS.label}>LABEL</span>
-      <input style={{ ...SS.input, marginBottom: 8 }} value={data.label}
-        onChange={e => onChange({ ...data, label: e.target.value })} />
-      <span style={SS.label}>RUNTIME VALUE</span>
-      <input style={SS.input} value={data.value} placeholder="Value at execution..."
-        onChange={e => onChange({ ...data, value: e.target.value })} />
-    </div>
-  );
-}
-
-function TextContent({ data, onChange }) {
-  return (
-    <div style={{ padding: "8px 12px 10px" }}>
-      <span style={SS.label}>CONTENT</span>
-      <textarea style={{ ...SS.input, resize: "none", height: 64, lineHeight: 1.45 }}
-        value={data.content} onChange={e => onChange({ ...data, content: e.target.value })} />
-    </div>
-  );
-}
-
-function PromptBuilderContent({ data, onChange }) {
-  const vars = [...new Set((data.template || "").match(/\{(\w+)\}/g)?.map(m => m.slice(1,-1)) || [])];
-  return (
-    <div style={{ padding: "8px 12px 10px" }}>
-      <span style={SS.label}>TEMPLATE — use <span style={{ color: "#fb923c" }}>{"{varName}"}</span></span>
-      <textarea style={{ ...SS.input, resize: "none", height: 72, fontSize: 11, lineHeight: 1.45 }}
-        value={data.template} onChange={e => onChange({ ...data, template: e.target.value })} />
-      {vars.length > 0 && (
-        <div style={{ marginTop: 5, fontSize: 9.5, color: "#64748b" }}>
-          Inputs: {vars.map(v => <span key={v} style={{ color: "#fb923c", marginRight: 5 }}>{`{${v}}`}</span>)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AiNodeContent({ data, onChange, result, status, defaultModel }) {
-  const model = data.model || defaultModel || MODELS[1];
-  return (
-    <div style={{ padding: "8px 12px 10px" }}>
-      <span style={SS.label}>SERVER URL</span>
-      <input
-        style={{ ...SS.input, marginBottom: 8, fontFamily: "monospace" }}
-        value={data.serverUrl || ""}
-        onChange={e => onChange({ ...data, serverUrl: e.target.value })}
-        placeholder="http://localhost:3000/api/chat"
-        spellCheck={false}
-      />
-      <span style={SS.label}>MODEL</span>
-      <select
-        style={{ ...SS.select, marginBottom: 8 }}
-        value={model}
-        onChange={e => onChange({ ...data, model: e.target.value })}
-      >
-        {MODELS.map(m => <option key={m} value={m}>{m}</option>)}
-      </select>
-      <span style={SS.label}>SYSTEM PROMPT</span>
-      <textarea style={{ ...SS.input, resize: "none", height: 50, lineHeight: 1.45, marginBottom: 8 }}
-        value={data.systemPrompt} onChange={e => onChange({ ...data, systemPrompt: e.target.value })} />
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ flex: 1 }}>
-          <span style={SS.label}>MAX TOKENS</span>
-          <input type="number" style={SS.input} value={data.maxTokens}
-            onChange={e => onChange({ ...data, maxTokens: parseInt(e.target.value) || 1000 })} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <span style={SS.label}>TEMPERATURE</span>
-          <input type="number" style={SS.input} value={data.temperature ?? 0.7} min="0" max="1" step="0.1"
-            onChange={e => onChange({ ...data, temperature: parseFloat(e.target.value) ?? 0.7 })} />
-        </div>
-      </div>
-      {status === "running" && (
-        <div style={{ marginTop: 8, fontSize: 10, color: "#a78bfa", display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ display: "inline-block", animation: "spin 0.9s linear infinite" }}>◌</span>
-          Calling {model.split("-").slice(0, 2).join("-")}…
-        </div>
-      )}
-      {result && status === "done" && (
-        <div style={{ marginTop: 8, padding: "6px 8px", background: "rgba(167,139,250,0.08)", borderRadius: 5, fontSize: 10.5, color: "#c4b5fd", maxHeight: 56, overflowY: "auto", lineHeight: 1.5, border: "1px solid rgba(167,139,250,0.12)" }}>
-          {String(result).slice(0, 220)}{String(result).length > 220 ? "…" : ""}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BranchContent({ data, onChange }) {
-  const add = () => onChange({ ...data, conditions: [...(data.conditions || []), { id: `b${Date.now()}`, label: `Path ${String.fromCharCode(65 + (data.conditions?.length || 0))}`, match: "", mode: "contains" }] });
-  const remove = id => onChange({ ...data, conditions: data.conditions.filter(c => c.id !== id) });
-  const update = (id, field, val) => onChange({ ...data, conditions: data.conditions.map(c => c.id === id ? { ...c, [field]: val } : c) });
-  return (
-    <div style={{ padding: "8px 12px 10px" }}>
-      {(data.conditions || []).map(c => (
-        <div key={c.id} style={{ marginBottom: 6 }}>
-          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-            <input value={c.label} onChange={e => update(c.id, "label", e.target.value)}
-              style={{ ...SS.input, flex: "0 0 62px", padding: "3px 6px", fontSize: 10.5 }} placeholder="label" />
-            <select value={c.mode || "contains"} onChange={e => update(c.id, "mode", e.target.value)}
-              style={{ ...SS.select, flex: "0 0 70px", padding: "3px 5px", fontSize: 9.5 }}>
-              {MATCH_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-            <input value={c.match} onChange={e => update(c.id, "match", e.target.value)}
-              style={{ ...SS.input, flex: 1, padding: "3px 6px", fontSize: 10.5 }} placeholder="value…" />
-            <button onClick={() => remove(c.id)}
-              style={{ ...SS.btn, padding: "2px 7px", color: "#f87171", background: "rgba(248,113,113,0.08)", flexShrink: 0 }}>×</button>
-          </div>
-        </div>
-      ))}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-        <button onClick={add} style={{ ...SS.btn, fontSize: 10, padding: "3px 9px" }}>+ Path</button>
-        <span style={{ fontSize: 9, color: "#1e3a5f" }}>+ else port always present</span>
-      </div>
-    </div>
-  );
-}
-
-function OutputContent({ result }) {
-  return (
-    <div style={{ padding: "8px 12px 10px" }}>
-      {result !== undefined && result !== null ? (
-        <div style={{ padding: "8px 10px", background: "rgba(251,191,36,0.07)", borderRadius: 5, fontSize: 11, color: "#fde68a", maxHeight: 160, overflowY: "auto", whiteSpace: "pre-wrap", lineHeight: 1.5, wordBreak: "break-word", border: "1px solid rgba(251,191,36,0.12)" }}>
-          {String(result)}
-        </div>
-      ) : (
-        <div style={{ fontSize: 10.5, color: "#1e293b", fontStyle: "italic" }}>Awaiting input…</div>
-      )}
-    </div>
-  );
-}
-
-function NoteContent({ data, onChange }) {
-  return (
-    <div style={{ padding: "8px 12px 10px" }}>
-      <textarea
-        style={{ ...SS.input, resize: "none", height: 66, lineHeight: 1.55, fontSize: 11, color: "#64748b" }}
-        value={data.text}
-        onChange={e => onChange({ ...data, text: e.target.value })}
-        placeholder="Add notes, context, or documentation…"
-      />
-    </div>
-  );
-}
 
 // ══════════════════════════════════════════════════════
 // FLOW NODE
@@ -361,13 +71,7 @@ function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPor
 
       {/* Content */}
       <div onMouseDown={e => e.stopPropagation()}>
-        {node.type === "userInput"     && <UserInputContent data={node.data} onChange={onDataChange} />}
-        {node.type === "textInput"     && <TextContent data={node.data} onChange={onDataChange} />}
-        {node.type === "promptBuilder" && <PromptBuilderContent data={node.data} onChange={onDataChange} />}
-        {node.type === "aiNode"        && <AiNodeContent data={node.data} onChange={onDataChange} result={result} status={st} defaultModel={defaultModel} />}
-        {node.type === "branch"        && <BranchContent data={node.data} onChange={onDataChange} />}
-        {node.type === "output"        && <OutputContent result={result} />}
-        {node.type === "note"          && <NoteContent data={node.data} onChange={onDataChange} />}
+        <NodeContent node={node} onChange={onDataChange} result={result} status={st} defaultModel={defaultModel} />
       </div>
 
       {/* Input ports */}
@@ -411,115 +115,10 @@ function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPor
 // ══════════════════════════════════════════════════════
 // EXECUTION ENGINE
 // ══════════════════════════════════════════════════════
-function resolveTemplate(str, vars) {
-  return String(str || "").replace(/\{(\w+)\}/g, (_, name) => vars[name] ?? `{${name}}`);
-}
-
-async function execNode(node, inputs, globalVars, log, defaultModel) {
-  log(`Running ${TYPE_META[node.type].label}`, "info");
-  switch (node.type) {
-    case "userInput":
-      return { out: node.data.value || "" };
-    case "textInput":
-      return { out: node.data.content || "" };
-    case "promptBuilder": {
-      let tpl = node.data.template || "";
-      getPorts(node).inputs.forEach(port => {
-        const vn = port.id.replace("v:", "");
-        const val = inputs[port.id] ?? globalVars[vn] ?? `{${vn}}`;
-        tpl = tpl.replace(new RegExp(`\\{${vn}\\}`, "g"), val);
-      });
-      return { out: tpl };
-    }
-    case "aiNode": {
-      const prompt    = inputs["in"] || "(no input)";
-      const model     = node.data.model || defaultModel || MODELS[1];
-      const serverUrl = resolveTemplate((node.data.serverUrl || "").trim(), globalVars);
-      const system    = resolveTemplate(node.data.systemPrompt || "You are helpful.", globalVars);
-      if (!serverUrl) {
-        log("⚠ No server URL set on AI node", "warn");
-        return { out: "[Error] No server URL configured on this AI node.", err: "missing_url" };
-      }
-      log(`→ POST ${serverUrl}`, "info");
-      try {
-        const res = await fetch(serverUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            model,
-            system,
-            max_tokens:  node.data.maxTokens || 1000,
-            temperature: node.data.temperature ?? 0.7,
-          }),
-        });
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.error?.message || errBody.message || `HTTP ${res.status}`);
-        }
-        const json = await res.json();
-        // Accept common response shapes: { text }, { output }, { result }, { message }, { content }, raw string
-        const text = typeof json === "string"
-          ? json
-          : json.text ?? json.output ?? json.result ?? json.message
-            ?? json.content?.[0]?.text ?? JSON.stringify(json);
-        log(`← ${String(text).length} chars received`, "success");
-        return { out: String(text), err: null };
-      } catch (e) {
-        log(`✗ Request failed: ${e.message}`, "error");
-        return { out: null, err: e.message };
-      }
-    }
-    case "branch": {
-      const raw  = inputs["in"] ?? "";
-      const val  = String(raw).toLowerCase();
-      const conds = node.data.conditions || [];
-      const result = {};
-      conds.forEach(c => { result[c.id] = null; });
-      result["_else"] = null;
-      let matched = false;
-      for (const c of conds) {
-        if (matched || !c.match) continue;
-        const m = c.match.toLowerCase();
-        let hit = false;
-        switch (c.mode || "contains") {
-          case "contains": hit = val.includes(m); break;
-          case "equals":   hit = val === m; break;
-          case "starts":   hit = val.startsWith(m); break;
-          case "ends":     hit = val.endsWith(m); break;
-          case "regex": { try { hit = new RegExp(c.match, "i").test(raw); } catch { hit = false; } break; }
-        }
-        if (hit) { result[c.id] = raw; matched = true; log(`Branch → "${c.label}" (${c.mode || "contains"}: "${c.match}")`, "info"); }
-      }
-      if (!matched) { result["_else"] = raw; log("Branch → else (no conditions matched)", "warn"); }
-      return result;
-    }
-    case "output":
-      return { _display: inputs["in"] };
-    case "note":
-      return {};
-    default:
-      return {};
-  }
-}
 
 // ══════════════════════════════════════════════════════
 // INITIAL GRAPH
 // ══════════════════════════════════════════════════════
-function buildInitialGraph() {
-  const n1 = { id: uid(), type: "userInput",     position: { x: 80, y: 110  }, data: defaultData("userInput")     };
-  const n2 = { id: uid(), type: "promptBuilder", position: { x: 430, y: 70  }, data: { template: "You are an expert assistant.\n\nUser question: {input}" } };
-  const n3 = { id: uid(), type: "aiNode",        position: { x: 780, y: 90  }, data: defaultData("aiNode")        };
-  const n4 = { id: uid(), type: "output",        position: { x: 1130, y: 120 }, data: defaultData("output")        };
-  return {
-    nodes: [n1, n2, n3, n4],
-    edges: [
-      { id: eid(), source: n1.id, sourceHandle: "out", target: n2.id, targetHandle: "v:input" },
-      { id: eid(), source: n2.id, sourceHandle: "out", target: n3.id, targetHandle: "in" },
-      { id: eid(), source: n3.id, sourceHandle: "out", target: n4.id, targetHandle: "in" },
-    ],
-  };
-}
 const INIT = buildInitialGraph();
 
 // ══════════════════════════════════════════════════════
@@ -757,6 +356,7 @@ export default function FlowForge() {
     }
     nodesSnap.forEach(n => { if (!seen.has(n.id)) order.push(n); });
 
+    const runtimeVars = { ...gvars };
     const portOut = {};
     const skipped = new Set();
 
@@ -772,7 +372,7 @@ export default function FlowForge() {
       });
 
       try {
-        const res = await execNode(node, inputs, gvars, log, defaultModel);
+        const res = await execNode(node, inputs, runtimeVars, log, defaultModel);
         Object.entries(res).forEach(([k, v]) => {
           portOut[`${node.id}:${k}`] = v;
           if (v === null) {
