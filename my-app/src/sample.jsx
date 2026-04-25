@@ -315,6 +315,18 @@ export default function FlowForge() {
     return () => el?.removeEventListener("wheel", onWheel);
   }, [onWheel]);
 
+  // Attach mousemove and mouseup to window so dragging/panning is correctly
+  // terminated even when the cursor leaves the canvas bounds (e.g. moves over
+  // the sidebar or releases the button outside the browser window).
+  useEffect(() => {
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [onMouseMove, onMouseUp]);
+
   // Palette DnD
   const onPaletteDrag = (e, type) => e.dataTransfer.setData("ntype", type);
   const onDrop = useCallback(e => {
@@ -519,9 +531,7 @@ export default function FlowForge() {
           {/* ── CANVAS ── */}
           <div ref={canvasRef}
             style={{ flex: 1, position: "relative", overflow: "hidden", cursor: "grab", background: "#050912", backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px)`, backgroundSize: `${gs}px ${gs}px`, backgroundPosition: `${gx}px ${gy}px` }}
-            onMouseMove={onMouseMove}
             onMouseDown={onMouseDown}
-            onMouseUp={onMouseUp}
             onDrop={onDrop}
             onDragOver={e => e.preventDefault()}
           >
