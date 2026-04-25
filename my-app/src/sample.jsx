@@ -81,6 +81,7 @@ function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPor
         return (
           <div key={port.id} style={{ position: "absolute", left: -(PORT_R + 1), top: py, zIndex: 10 }}>
             <div
+              onMouseDown={e => e.stopPropagation()}
               onMouseUp={() => onPortUp(node.id, port.id, "in")}
               style={{ width: PORT_R * 2, height: PORT_R * 2, borderRadius: "50%", background: "#080d18", border: `2px solid ${color}`, cursor: "crosshair", transition: "box-shadow 0.12s" }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = `0 0 10px ${color}`}
@@ -164,7 +165,7 @@ export default function FlowForge() {
       const tag = document.activeElement?.tagName;
       const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(tag);
       if ((e.key === "Delete" || e.key === "Backspace") && selected && !typing) {
-        setNodes(ns => { pushHistory(ns, []); return ns.filter(n => n.id !== selected); });
+        setNodes(ns => { pushHistory(ns, edges); return ns.filter(n => n.id !== selected); });
         setEdges(es => es.filter(ev => ev.source !== selected && ev.target !== selected));
         setSelected(null);
         log("Node deleted", "info");
@@ -176,7 +177,7 @@ export default function FlowForge() {
           if (!h.length) return h;
           const prev = h[h.length - 1];
           setNodes(prev.nodes);
-          if (prev.edges.length) setEdges(prev.edges);
+          setEdges(prev.edges);
           log("Undo", "info");
           return h.slice(0, -1);
         });
@@ -186,7 +187,7 @@ export default function FlowForge() {
         setNodes(ns => {
           const src = ns.find(n => n.id === selected);
           if (!src) return ns;
-          pushHistory(ns, []);
+          pushHistory(ns, edges);
           const newId = uid();
           const clone = { ...src, id: newId, position: { x: src.position.x + 40, y: src.position.y + 40 }, data: { ...src.data } };
           setSelected(newId);
@@ -197,7 +198,7 @@ export default function FlowForge() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selected, log, pushHistory]);
+  }, [selected, log, pushHistory, edges]);
 
   const toCanvas = useCallback((sx, sy) => {
     const r = canvasRef.current?.getBoundingClientRect();
@@ -213,24 +214,24 @@ export default function FlowForge() {
   }, [log]);
 
   const deleteNode = useCallback((id) => {
-    setNodes(ns => { pushHistory(ns, []); return ns.filter(n => n.id !== id); });
+    setNodes(ns => { pushHistory(ns, edges); return ns.filter(n => n.id !== id); });
     setEdges(es => es.filter(e => e.source !== id && e.target !== id));
     if (selected === id) setSelected(null);
     log("Node removed", "info");
-  }, [selected, log, pushHistory]);
+  }, [selected, log, pushHistory, edges]);
 
   const duplicateNode = useCallback((id) => {
     setNodes(ns => {
       const src = ns.find(n => n.id === id);
       if (!src) return ns;
-      pushHistory(ns, []);
+      pushHistory(ns, edges);
       const newId = uid();
       const clone = { ...src, id: newId, position: { x: src.position.x + 40, y: src.position.y + 40 }, data: { ...src.data } };
       setSelected(newId);
       log(`Duplicated ${TYPE_META[src.type].label}`, "info");
       return [...ns, clone];
     });
-  }, [log, pushHistory]);
+  }, [log, pushHistory, edges]);
 
   const updateData = useCallback((id, data) => {
     setNodes(ns => ns.map(n => n.id === id ? { ...n, data } : n));
