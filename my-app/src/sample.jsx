@@ -402,11 +402,23 @@ export default function FlowForge() {
 
     for (const node of order) {
       if (skipped.has(node.id)) { log(`  skip: ${TYPE_META[node.type].label}`, "warn"); continue; }
+
+      const incoming = inMap[node.id] || [];
+      const missingInput = incoming.some(e => {
+        const v = portOut[`${e.source}:${e.sourceHandle}`];
+        return v === undefined || v === null;
+      });
+      if (missingInput && incoming.length > 0) {
+        log(`  skip: ${TYPE_META[node.type].label} (no input from branch path)`, "warn");
+        skipped.add(node.id);
+        continue;
+      }
+
       setNodeStatus(s => ({ ...s, [node.id]: "running" }));
       await new Promise(r => setTimeout(r, 60));
 
       const inputs = {};
-      (inMap[node.id] || []).forEach(e => {
+      incoming.forEach(e => {
         const v = portOut[`${e.source}:${e.sourceHandle}`];
         if (v !== null && v !== undefined) inputs[e.targetHandle] = v;
       });
