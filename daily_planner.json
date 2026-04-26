@@ -1,0 +1,360 @@
+{
+  "nodes": [
+    {
+      "id": "input_form",
+      "type": "userInput",
+      "position": { "x": -800, "y": 0 },
+      "data": {
+        "label": "Morning Check-In Form",
+        "value": "Date: {date}\nMood: {mood}\nEnergy: {energy_level}\nSuccess Definition: {success_definition}"
+      }
+    },
+    {
+      "id": "ctx_knowledge",
+      "type": "textInput",
+      "position": { "x": -800, "y": 250 },
+      "data": {
+        "content": "KNOWLEDGE CLUSTER:\n- Preferences: User prefers concise summaries and time-blocked schedules\n- Processes: Always fetch calendar before scheduling tasks. Never schedule tasks in calendar-blocked windows.\n- Planning Rules: Match task complexity to energy level. High energy = deep work first. Low energy = admin/async tasks first.\n- Tools: fetch_calendar, fetch_tasks, fetch_planning_preferences, schedule_task\n- Connected Apps: Google Calendar, Internal Task DB, Planning Preferences DB\n\nUse BLOCKER:<REASON/QUESTION> syntax when you need clarification from the user."
+      }
+    },
+    {
+      "id": "memory_init",
+      "type": "textInput",
+      "position": { "x": -800, "y": 500 },
+      "data": {
+        "content": "MEMORY TABLE (Daily Plan Session):\n[date]: (see form input)\n[mood]: (see form input)\n[energy_level]: (see form input)\n[success_definition]: (see form input)\n[calendar_events]: null\n[tasks_fetched]: null\n[planning_preferences]: null\n[scheduled_plan]: null\n[total_working_hours]: null\n[north_star]: null\n[current_step]: 0\n[last_result]: null"
+      }
+    },
+    {
+      "id": "planner_system",
+      "type": "textInput",
+      "position": { "x": -400, "y": -200 },
+      "data": {
+        "content": "You are the Daily Planner Agent in Planning Phase.\n\nGiven the user's morning check-in form and context, generate a detailed atomic step-by-step plan to produce their daily schedule.\n\nThe plan must always include these steps in order:\n1. Fetch today's calendar events\n2. Fetch the user's open tasks from the task database\n3. Fetch the user's planning preferences\n4. Schedule tasks into free calendar windows based on energy level, preferences, and priorities\n5. Calculate total suggested working hours\n6. Generate the north star summary\n\nFormat:\n[\n  {\"step\": 1, \"action\": \"...\", \"type\": \"action_agent|internal|specialize_sub_agent\", \"expected_outcome\": \"...\"},\n  ...\n]\n\nKeep steps atomic. Always return valid JSON array only, no extra text."
+      }
+    },
+    {
+      "id": "planner_prompt",
+      "type": "promptBuilder",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "template": "SYSTEM:\n{planner_system}\n\nKNOWLEDGE:\n{knowledge}\n\nMEMORY TABLE:\n{memory}\n\nMORNING CHECK-IN:\n{form_input}"
+      }
+    },
+    {
+      "id": "planner_ai",
+      "type": "aiNode",
+      "position": { "x": 400, "y": 0 },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "You are the Daily Planner Agent in Planning Phase.\n\nGenerate a step-by-step atomic plan to build the user's daily schedule.\n\nSteps must always cover:\n1. Fetch calendar events for today\n2. Fetch user's open/due tasks from task DB\n3. Fetch planning preferences\n4. Schedule tasks into free time windows (respect energy level and priorities)\n5. Calculate total working hours\n6. Generate a one-sentence north star summary\n\nReturn ONLY a valid JSON array:\n[\n  {\"step\": 1, \"action\": \"...\", \"type\": \"...\", \"expected_outcome\": \"...\"},\n  ...\n]",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.3
+      }
+    },
+    {
+      "id": "plan_output",
+      "type": "output",
+      "position": { "x": 700, "y": -100 },
+      "data": {
+        "label": "📋 Daily Plan Steps Generated"
+      }
+    },
+    {
+      "id": "save_plan",
+      "type": "setGlobal",
+      "position": { "x": 760, "y": 220 },
+      "data": {
+        "key": "plan",
+        "value": ""
+      }
+    },
+    {
+      "id": "plan_done_gate",
+      "type": "branch",
+      "position": { "x": 1000, "y": 0 },
+      "data": {
+        "conditions": []
+      }
+    },
+    {
+      "id": "executor_system",
+      "type": "textInput",
+      "position": { "x": 1200, "y": -400 },
+      "data": {
+        "content": "You are the Daily Planner Agent in Execution Phase.\n\nYou are working through the plan step by step. You receive:\n- The full plan\n- The current step to execute\n- Knowledge cluster\n- Memory table\n- Last result (if any)\n\nFor each step, decide how to execute:\n- Internal: use one of your internal tools directly\n- External action: respond with <assign:action_agent, task: ..., expected_outcome: \"...\">\n- Specialized: respond with <assign:specialize_sub_agent, skills: [...], task: ..., expected_outcome: \"...\">\n\nScheduling rules:\n- NEVER place a task in a window already occupied by a calendar event\n- Match task complexity to energy level: High energy → deep/complex tasks in morning prime slots. Medium → balanced mix. Low → async, admin, light reviews only.\n- Respect planning preferences (focus blocks, preferred hours, no-meeting rules)\n- Each scheduled task must have: title, start_time, end_time, duration_minutes, priority, project\n\nAlways output:\n- ACTIVITY: one-line summary of what you are doing\n- MEMORY_UPDATE: key:value pairs to update in memory\n- STEP_RESULT: outcome of this step\n- NEXT_STEP: next step number, or DONE if complete\n- NEEDS_PERMISSION: true/false\n- BLOCKER: null or a question for the user if stuck"
+      }
+    },
+    {
+      "id": "executor_prompt",
+      "type": "promptBuilder",
+      "position": { "x": 1640, "y": -80 },
+      "data": {
+        "template": "SYSTEM:\n{executor_system}\n\nPLAN:\n{plan}\n\nCURRENT STEP:\n{current_step}\n\nKNOWLEDGE:\n{knowledge}\n\nMEMORY TABLE:\n{memory}\n\nLAST RESULT:\n{last_result}\n\nINTERNAL TOOLS:\n{internal_tools}\n\nAction Agent's Tools:\nGoogle Calendar, Internal Task DB, Planning Preferences DB"
+      }
+    },
+    {
+      "id": "executor_ai",
+      "type": "aiNode",
+      "position": { "x": 1960, "y": 0 },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "You are the Daily Planner Execution Agent. Follow your instructions precisely.\n<REMEMBER>: A step cannot be both BLOCKED and ASSIGNED — either output BLOCKER or ASSIGNED, never both.\nAlways include ACTIVITY, MEMORY_UPDATE, STEP_RESULT, NEXT_STEP, NEEDS_PERMISSION, BLOCKER in your response.",
+        "maxTokens": 1200,
+        "model": "",
+        "temperature": 0.4
+      }
+    },
+    {
+      "id": "activity_output",
+      "type": "output",
+      "position": { "x": 2300, "y": -240 },
+      "data": {
+        "label": "🟠 Activity Tracker"
+      }
+    },
+    {
+      "id": "executor_branch",
+      "type": "branch",
+      "position": { "x": 2300, "y": 100 },
+      "data": {
+        "conditions": [
+          {
+            "id": "b_permission",
+            "label": "Needs Permission",
+            "match": "NEEDS_PERMISSION: true",
+            "mode": "contains"
+          },
+          {
+            "id": "b_blocker",
+            "label": "Has Blocker",
+            "match": "BLOCKER: ",
+            "mode": "contains"
+          },
+          {
+            "id": "b_action",
+            "label": "Action Agent",
+            "match": "assign:action_agent",
+            "mode": "contains"
+          },
+          {
+            "id": "b_sp",
+            "label": "SP Agent",
+            "match": "assign:specialize_sub_agent",
+            "mode": "contains"
+          }
+        ]
+      }
+    },
+    {
+      "id": "permission_gate_output",
+      "type": "output",
+      "position": { "x": 2700, "y": -400 },
+      "data": {
+        "label": "🟡 Permission Gate — Awaiting User Approval"
+      }
+    },
+    {
+      "id": "blocker_output",
+      "type": "output",
+      "position": { "x": 2720, "y": -260 },
+      "data": {
+        "label": "🔶 BLOCKER — Awaiting User Input"
+      }
+    },
+    {
+      "id": "action_agent_prompt",
+      "type": "promptBuilder",
+      "position": { "x": 2700, "y": 0 },
+      "data": {
+        "template": "ACTION AGENT TASK:\n{context}\n\nToday's Date: {date}\nUser Energy: {energy_level}\n\nExecute the assigned task using your connected tools and return the result."
+      }
+    },
+    {
+      "id": "action_agent_ai",
+      "type": "aiNode",
+      "position": { "x": 3080, "y": -260 },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "You are an Action Agent connected to Google Calendar, the Internal Task DB, and the Planning Preferences DB.\n\nFor calendar fetches: return a list of today's events with title, start_time, end_time.\nFor task fetches: return open tasks with title, estimated_duration_minutes, priority, project, due_date.\nFor preference fetches: return preferred_work_start, preferred_work_end, focus_block_preference, energy_peak_hours, excluded_hours.\n\nReturn results in this format:\nRESULT: <structured data>\nSTATUS: success|failed",
+        "maxTokens": 800,
+        "model": "",
+        "temperature": 0.3
+      }
+    },
+    {
+      "id": "action_agent_output",
+      "type": "output",
+      "position": { "x": 3500, "y": -500 },
+      "data": {
+        "label": "✅ Action Agent Result"
+      }
+    },
+    {
+      "id": "save_last_result_aa",
+      "type": "setGlobal",
+      "position": { "x": 3520, "y": -80 },
+      "data": {
+        "key": "last_result",
+        "value": ""
+      }
+    },
+    {
+      "id": "sp_agent_prompt",
+      "type": "promptBuilder",
+      "position": { "x": 2700, "y": 200 },
+      "data": {
+        "template": "SP AGENT TASK:\n{context}\n\nGoal (G): Complete the specialized scheduling or synthesis task assigned.\nMemory Table Reference:\n{memory}\nExtra Context (C) from Planner:\n{knowledge}\n\nGenerate your own sub-plan (P), execute using your skills, and return the result."
+      }
+    },
+    {
+      "id": "sp_agent_ai",
+      "type": "aiNode",
+      "position": { "x": 3040, "y": 340 },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "You are a Specialized Sub-Agent for the Daily Planner.\n\nYou may be called for:\n- Scheduling synthesis: given calendar events, tasks, and preferences, produce a time-blocked schedule\n- North star generation: given the schedule, priorities, and user's success definition, output one concise north star sentence\n- Working hours calculation: sum task durations excluding calendar-blocked time\n\nCreate your own internal plan, execute it, and return:\nRESULT: <structured output>\nSTATUS: success|failed\nMEMORY_UPDATE: key:value updates",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.5
+      }
+    },
+    {
+      "id": "sp_agent_output",
+      "type": "output",
+      "position": { "x": 3400, "y": 400 },
+      "data": {
+        "label": "✅ SP Agent Result"
+      }
+    },
+    {
+      "id": "save_last_result_sp",
+      "type": "setGlobal",
+      "position": { "x": 3400, "y": 700 },
+      "data": {
+        "key": "last_result",
+        "value": ""
+      }
+    },
+    {
+      "id": "done_gate",
+      "type": "branch",
+      "position": { "x": 4100, "y": 40 },
+      "data": {
+        "conditions": [
+          {
+            "id": "b_done",
+            "label": "Done",
+            "match": "NEXT_STEP: DONE",
+            "mode": "contains"
+          }
+        ]
+      }
+    },
+    {
+      "id": "save_current_step",
+      "type": "setGlobal",
+      "position": { "x": 4520, "y": -220 },
+      "data": {
+        "key": "current_step",
+        "value": ""
+      }
+    },
+    {
+      "id": "output_system",
+      "type": "textInput",
+      "position": { "x": 4560, "y": 0 },
+      "data": {
+        "content": "You are the Daily Planner Agent in Output Phase.\n\nThe planning session is complete. Using the final memory table, produce the user's daily plan in this exact format:\n\n--- DAILY PLAN ---\n\n🌟 TODAY'S NORTH STAR\n<one sentence>\n\n⏱️ TOTAL SUGGESTED WORKING HOURS\n<e.g. 5h 30m>\n\n📅 SCHEDULE\n[\n  {\n    \"start_time\": \"HH:MM\",\n    \"end_time\": \"HH:MM\",\n    \"title\": \"...\",\n    \"duration_minutes\": ...,\n    \"type\": \"task|meeting|focus_block\",\n    \"priority\": \"high|medium|low\",\n    \"project\": \"...\"\n  },\n  ...\n]\n\nSort schedule items by start_time ascending. Do not include any explanation — only the formatted output above."
+      }
+    },
+    {
+      "id": "output_prompt",
+      "type": "promptBuilder",
+      "position": { "x": 4580, "y": 220 },
+      "data": {
+        "template": "SYSTEM:\n{output_system}\n\nFINAL MEMORY TABLE:\n{memory}\n\nUSER CONTEXT:\nMood: {mood}\nEnergy: {energy_level}\nSuccess Definition: {success_definition}"
+      }
+    },
+    {
+      "id": "output_ai",
+      "type": "aiNode",
+      "position": { "x": 5140, "y": -60 },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "You are the Daily Planner Output Agent. Produce the final daily plan from memory. Output only the formatted plan — no extra commentary.",
+        "maxTokens": 1200,
+        "model": "",
+        "temperature": 0.3
+      }
+    },
+    {
+      "id": "final_output",
+      "type": "output",
+      "position": { "x": 5940, "y": -140 },
+      "data": {
+        "label": "🏁 Your Day is Ready"
+      }
+    },
+    {
+      "id": "save_scheduled_plan",
+      "type": "setGlobal",
+      "position": { "x": 5880, "y": 240 },
+      "data": {
+        "key": "scheduled_plan",
+        "value": ""
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e001", "source": "input_form", "sourceHandle": "out", "target": "planner_prompt", "targetHandle": "v:form_input" },
+    { "id": "e002", "source": "ctx_knowledge", "sourceHandle": "out", "target": "planner_prompt", "targetHandle": "v:knowledge" },
+    { "id": "e003", "source": "memory_init", "sourceHandle": "out", "target": "planner_prompt", "targetHandle": "v:memory" },
+    { "id": "e004", "source": "planner_system", "sourceHandle": "out", "target": "planner_prompt", "targetHandle": "v:planner_system" },
+    { "id": "e005", "source": "planner_prompt", "sourceHandle": "out", "target": "planner_ai", "targetHandle": "in" },
+    { "id": "e006", "source": "planner_ai", "sourceHandle": "out", "target": "plan_output", "targetHandle": "in" },
+    { "id": "e007", "source": "planner_ai", "sourceHandle": "out", "target": "save_plan", "targetHandle": "in" },
+    { "id": "e008", "source": "save_plan", "sourceHandle": "out", "target": "plan_done_gate", "targetHandle": "in" },
+    { "id": "e009", "source": "plan_done_gate", "sourceHandle": "_else", "target": "executor_prompt", "targetHandle": "v:plan" },
+    { "id": "e010", "source": "executor_system", "sourceHandle": "out", "target": "executor_prompt", "targetHandle": "v:executor_system" },
+    { "id": "e011", "source": "ctx_knowledge", "sourceHandle": "out", "target": "executor_prompt", "targetHandle": "v:knowledge" },
+    { "id": "e012", "source": "memory_init", "sourceHandle": "out", "target": "executor_prompt", "targetHandle": "v:memory" },
+    { "id": "e013", "source": "executor_prompt", "sourceHandle": "out", "target": "executor_ai", "targetHandle": "in" },
+    { "id": "e014", "source": "executor_ai", "sourceHandle": "out", "target": "activity_output", "targetHandle": "in" },
+    { "id": "e015", "source": "executor_ai", "sourceHandle": "out", "target": "executor_branch", "targetHandle": "in" },
+    { "id": "e016", "source": "executor_branch", "sourceHandle": "b_permission", "target": "permission_gate_output", "targetHandle": "in" },
+    { "id": "e017", "source": "executor_branch", "sourceHandle": "b_blocker", "target": "blocker_output", "targetHandle": "in" },
+    { "id": "e018", "source": "executor_branch", "sourceHandle": "b_action", "target": "action_agent_prompt", "targetHandle": "v:context" },
+    { "id": "e019", "source": "executor_branch", "sourceHandle": "b_sp", "target": "sp_agent_prompt", "targetHandle": "v:context" },
+    { "id": "e020", "source": "ctx_knowledge", "sourceHandle": "out", "target": "sp_agent_prompt", "targetHandle": "v:knowledge" },
+    { "id": "e021", "source": "memory_init", "sourceHandle": "out", "target": "sp_agent_prompt", "targetHandle": "v:memory" },
+    { "id": "e022", "source": "action_agent_prompt", "sourceHandle": "out", "target": "action_agent_ai", "targetHandle": "in" },
+    { "id": "e023", "source": "action_agent_ai", "sourceHandle": "out", "target": "action_agent_output", "targetHandle": "in" },
+    { "id": "e024", "source": "action_agent_ai", "sourceHandle": "out", "target": "save_last_result_aa", "targetHandle": "in" },
+    { "id": "e025", "source": "save_last_result_aa", "sourceHandle": "out", "target": "done_gate", "targetHandle": "in" },
+    { "id": "e026", "source": "sp_agent_prompt", "sourceHandle": "out", "target": "sp_agent_ai", "targetHandle": "in" },
+    { "id": "e027", "source": "sp_agent_ai", "sourceHandle": "out", "target": "sp_agent_output", "targetHandle": "in" },
+    { "id": "e028", "source": "sp_agent_ai", "sourceHandle": "out", "target": "save_last_result_sp", "targetHandle": "in" },
+    { "id": "e029", "source": "save_last_result_sp", "sourceHandle": "out", "target": "done_gate", "targetHandle": "in" },
+    { "id": "e030", "source": "executor_branch", "sourceHandle": "_else", "target": "done_gate", "targetHandle": "in" },
+    { "id": "e031", "source": "done_gate", "sourceHandle": "b_done", "target": "output_prompt", "targetHandle": "v:memory" },
+    { "id": "e032", "source": "done_gate", "sourceHandle": "_else", "target": "save_current_step", "targetHandle": "in" },
+    { "id": "e033", "source": "output_system", "sourceHandle": "out", "target": "output_prompt", "targetHandle": "v:output_system" },
+    { "id": "e034", "source": "output_prompt", "sourceHandle": "out", "target": "output_ai", "targetHandle": "in" },
+    { "id": "e035", "source": "output_ai", "sourceHandle": "out", "target": "final_output", "targetHandle": "in" },
+    { "id": "e036", "source": "output_ai", "sourceHandle": "out", "target": "save_scheduled_plan", "targetHandle": "in" }
+  ],
+  "gvars": {
+    "server_url": "http://localhost:8000/api/chat",
+    "plan": "",
+    "current_step": "1",
+    "last_result": "",
+    "scheduled_plan": "",
+    "date": "",
+    "mood": "",
+    "energy_level": "",
+    "success_definition": "",
+    "internal_tools": "[ fetch_calendar(date), fetch_tasks(due_date, assignee), fetch_planning_preferences(user_id), schedule_task(title, start_time, end_time, priority, project) ]"
+  }
+}
