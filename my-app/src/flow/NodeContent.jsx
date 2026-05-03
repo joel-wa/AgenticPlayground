@@ -135,9 +135,9 @@ function SetGlobalContent({ data, onChange }) {
 
 function OutputContent({ result }) {
   return (
-    <div style={{ padding: "8px 12px 10px" }}>
+    <div style={{ padding: "8px 12px 10px", userSelect: "text" }}>
       {result !== undefined && result !== null ? (
-        <div style={{ padding: "8px 10px", background: "rgba(251,191,36,0.07)", borderRadius: 5, fontSize: 11, color: "#fde68a", maxHeight: 160, overflowY: "auto", whiteSpace: "pre-wrap", lineHeight: 1.5, wordBreak: "break-word", border: "1px solid rgba(251,191,36,0.12)" }}>
+        <div style={{ padding: "8px 10px", background: "rgba(251,191,36,0.07)", borderRadius: 5, fontSize: 11, color: "#fde68a", maxHeight: 160, overflowY: "auto", whiteSpace: "pre-wrap", lineHeight: 1.5, wordBreak: "break-word", border: "1px solid rgba(251,191,36,0.12)", userSelect: "text" }}>
           {String(result)}
         </div>
       ) : (

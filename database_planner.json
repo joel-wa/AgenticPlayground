@@ -1,0 +1,712 @@
+{
+  "nodes": [
+    {
+      "id": "user_prompt",
+      "type": "userInput",
+      "position": {
+        "x": -800,
+        "y": 0
+      },
+      "data": {
+        "label": "View Request",
+        "value": "User request: Create a view for me to track all of my cashflow"
+      }
+    },
+    {
+      "id": "registry_context",
+      "type": "textInput",
+      "position": {
+        "x": -800,
+        "y": 250
+      },
+      "data": {
+        "content": "EXISTING TYPE REGISTRY:\n\nTABLE subscriptions (\n    id INTEGER PRIMARY KEY,\n    service_name TEXT,\n    monthly_cost REAL,\n    billing_day INTEGER,\n    category TEXT,\n    status TEXT,\n    person_id INTEGER,\n    FOREIGN KEY (person_id) REFERENCES persons(id)\n)\n\nTABLE expenses (\n  id INTEGER PRIMARY KEY,\n  amount REAL,\n  category TEXT,\n  description TEXT,\n  date TEXT,\n  person_id INTEGER,\n  FOREIGN KEY (person_id) REFERENCES persons (id)\n);\n\nTABLE: tasks\n- id (INTEGER PRIMARY KEY)\n- title (TEXT)\n- status (TEXT)\n- priority (TEXT)\n- due_date (TEXT)\n- assigned_to (INTEGER FK persons.id)\n- created_at (TEXT)\n\nTABLE: events\n- id (INTEGER PRIMARY KEY)\n- title (TEXT)\n- start_time (TEXT)\n- end_time (TEXT)\n- location (TEXT)\n- linked_task_id (INTEGER FK tasks.id)\n\nTABLE: persons\n- id (INTEGER PRIMARY KEY)\n- name (TEXT)\n- role (TEXT)\n- email (TEXT)\n\nTABLE: notes\n- id (INTEGER PRIMARY KEY)\n- content (TEXT)\n- tags (TEXT)\n- linked_object_id (INTEGER)\n- linked_object_type (TEXT)\n- created_at (TEXT)\n\nTABLE: focus_sessions\n- id (INTEGER PRIMARY KEY)\n- title (TEXT)\n- duration (INTEGER)\n- energy (TEXT)\n- notes (TEXT)\n- linked_task_id (INTEGER FK tasks.id)\n- created_at (TEXT)\n\ndaily_checkins (\n  id INTEGER PRIMARY KEY,\n  mood TEXT,\n  daily_goal TEXT,\n  person_id INTEGER,\n  created_at TEXT,\n  FOREIGN KEY (person_id) REFERENCES persons(id)\n)\n\nRELATIONSHIPS:\n- tasks.assigned_to → persons.id\n- events.linked_task_id → tasks.id\n- focus_sessions.linked_task_id → tasks.id\n- notes.linked_object_id → any table (polymorphic)"
+      }
+    },
+    {
+      "id": "db_agent_system",
+      "type": "textInput",
+      "position": {
+        "x": -800,
+        "y": 500
+      },
+      "data": {
+        "content": "You are a database planning agent for a productivity app.\n\nYour job is to analyze a user request and the existing type registry, then decide the correct database action.\n\nDECISION RULES:\n- If the concept already exists fully → action: join\n- If the concept exists but needs new fields → action: extend\n- If the concept is entirely new → action: create\n- If it needs a new table AND relationships to existing ones → action: composite\n\nFor action: join, also decide join_strategy:\n- \"union\" → two tables represent the same concept (e.g. expenses + subscriptions both = money out) → use UNION ALL\n- \"enrich\" → one table needs context from another (e.g. tasks + persons) → use LEFT JOIN\n- \"aggregate\" → user wants totals/summaries → use GROUP BY\n\nNever create what already exists.\nAlways prefer reuse over creation.\nAlways output a relationship map as JSON only.\n\nOUTPUT FORMAT:\n{\n  \"action\": \"create\" | \"extend\" | \"join\" | \"composite\",\n  \"join_strategy\": \"union\" | \"enrich\" | \"aggregate\" | null,\n  \"reasoning\": \"why this decision was made\",\n  \"target_tables\": [\"table names involved\"],\n  \"union_tables\": [\"tables to UNION ALL\"] or null,\n  \"enrich_with\": [\"tables to LEFT JOIN for context\"] or null,\n  \"new_table\": { \"name\": \"\", \"columns\": [] } or null,\n  \"extend_table\": { \"name\": \"\", \"add_columns\": [] } or null,\n  \"foreign_keys\": { \"column\": \"references\" } or null\n}"
+      }
+    },
+    {
+      "id": "decision_prompt",
+      "type": "promptBuilder",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "data": {
+        "template": "SYSTEM:\n{db_agent_system}\n\nNEEDS ANALYSIS:\n{needs_analysis}\n\nEXISTING REGISTRY:\n{registry_context}\n\nUSER REQUEST:\n{user_prompt}"
+      }
+    },
+    {
+      "id": "analysis_prompt",
+      "type": "promptBuilder",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "data": {
+        "template": "SYSTEM:\nYou are a needs analysis agent.\nGiven this user request, identify:\n1. WHAT DATA IS NEEDED to fulfil this use case completely\n2. WHAT DATA ALREADY EXISTS in the registry\n3. WHAT DATA IS MISSING and must be created\n4. ANY TIME/DATE DIMENSIONS this use case implies\n\nOutput a needs analysis JSON before deciding any action.\n\nEXISTING REGISTRY:\n{registry_context}\n\nUSER REQUEST:\n{user_prompt}"
+      }
+    },
+    {
+      "id": "needs_analysis",
+      "type": "aiNode",
+      "position": {
+        "x": 400,
+        "y": 200
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "Output a needs analysis JSON only. No extra text.",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.1
+      }
+    },
+    {
+      "id": "db_agent",
+      "type": "aiNode",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "You are a database planning agent. Output relationship map JSON only. No extra text.",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.1
+      }
+    },
+    {
+      "id": "decision_branch",
+      "type": "branch",
+      "position": {
+        "x": 800,
+        "y": 0
+      },
+      "data": {
+        "conditions": [
+          {
+            "id": "b_create",
+            "label": "Create New Table",
+            "match": "\"action\": \"create\"",
+            "mode": "contains"
+          },
+          {
+            "id": "b_extend",
+            "label": "Extend Existing Table",
+            "match": "\"action\": \"extend\"",
+            "mode": "contains"
+          },
+          {
+            "id": "b_join_union",
+            "label": "Join via UNION ALL",
+            "match": "\"join_strategy\": \"union\"",
+            "mode": "contains"
+          },
+          {
+            "id": "b_join_enrich",
+            "label": "Join via LEFT JOIN enrich",
+            "match": "\"join_strategy\": \"enrich\"",
+            "mode": "contains"
+          },
+          {
+            "id": "b_join_aggregate",
+            "label": "Join via aggregation",
+            "match": "\"join_strategy\": \"aggregate\"",
+            "mode": "contains"
+          },
+          {
+            "id": "b_composite",
+            "label": "Composite New + Join",
+            "match": "\"action\": \"composite\"",
+            "mode": "contains"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sql_system",
+      "type": "textInput",
+      "position": {
+        "x": 780,
+        "y": 380
+      },
+      "data": {
+        "content": "You are a SQLite execution agent.\nGiven a relationship map JSON, output only the exact SQLite statements needed.\n\nFor action: create → output CREATE TABLE statement.\nFor action: extend → output ALTER TABLE statements.\nFor action: composite → output CREATE TABLE + ALTER TABLE + CREATE VIEW as needed.\n\nFor action: join, follow join_strategy:\n- \"union\" → UNION ALL the union_tables, LEFT JOIN enrich_with tables for context\n- \"enrich\" → LEFT JOIN all target tables, explicit columns only\n- \"aggregate\" → LEFT JOIN then GROUP BY with SUM/COUNT as appropriate\n\nSTRICT SQL RULES:\n- Never use plain JOIN — always LEFT JOIN unless explicitly aggregating\n- Never join two sibling tables to a parent — use UNION ALL instead\n- Never use table.* — always select explicit columns\n- One row per record unless aggregation is requested\n- For union views, add a \"type\" column to distinguish source table\n\nOutput SQL only. No explanation."
+      }
+    },
+    {
+      "id": "sql_prompt_create",
+      "type": "promptBuilder",
+      "position": {
+        "x": 1200,
+        "y": -300
+      },
+      "data": {
+        "template": "SYSTEM:\n{sql_system}\n\nRELATIONSHIP MAP:\n{db_agent}"
+      }
+    },
+    {
+      "id": "sql_prompt_extend",
+      "type": "promptBuilder",
+      "position": {
+        "x": 1200,
+        "y": 0
+      },
+      "data": {
+        "template": "SYSTEM:\n{sql_system}\n\nTABLES: {TABLES}\n\nRELATIONSHIP MAP:\n{db_agent}"
+      }
+    },
+    {
+      "id": "sql_prompt_join_union",
+      "type": "promptBuilder",
+      "position": {
+        "x": 1280,
+        "y": 320
+      },
+      "data": {
+        "template": "SYSTEM:\n{sql_system}\n\nTABLES: {TABLES}\n\nRELATIONSHIP MAP:\n{db_agent}"
+      }
+    },
+    {
+      "id": "sql_prompt_join_enrich",
+      "type": "promptBuilder",
+      "position": {
+        "x": 1240,
+        "y": 680
+      },
+      "data": {
+        "template": "SYSTEM:\n{sql_system}\n\nTABLES: {TABLES}\n\nRELATIONSHIP MAP:\n{db_agent}"
+      }
+    },
+    {
+      "id": "sql_prompt_join_aggregate",
+      "type": "promptBuilder",
+      "position": {
+        "x": 1260,
+        "y": 880
+      },
+      "data": {
+        "template": "SYSTEM:\n{sql_system}\n\nTABLES: {TABLES}\n\nRELATIONSHIP MAP:\n{db_agent}"
+      }
+    },
+    {
+      "id": "sql_prompt_composite",
+      "type": "promptBuilder",
+      "position": {
+        "x": 1240,
+        "y": 1060
+      },
+      "data": {
+        "template": "SYSTEM:\n{sql_system}\n\nTABLES: {TABLES}\n\nRELATIONSHIP MAP:\n{db_agent}"
+      }
+    },
+    {
+      "id": "execute_create",
+      "type": "aiNode",
+      "position": {
+        "x": 1600,
+        "y": -420
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "Output SQLite CREATE TABLE statement only.",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.1
+      }
+    },
+    {
+      "id": "execute_extend",
+      "type": "aiNode",
+      "position": {
+        "x": 1620,
+        "y": -140
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "Output SQLite ALTER TABLE statements only.",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.1
+      }
+    },
+    {
+      "id": "execute_join_union",
+      "type": "aiNode",
+      "position": {
+        "x": 1620,
+        "y": 200
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "Output SQLite CREATE VIEW statement only.",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.1
+      }
+    },
+    {
+      "id": "execute_join_enrich",
+      "type": "aiNode",
+      "position": {
+        "x": 1620,
+        "y": 620
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "Output SQLite CREATE VIEW statement only.",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.1
+      }
+    },
+    {
+      "id": "execute_join_aggregate",
+      "type": "aiNode",
+      "position": {
+        "x": 1620,
+        "y": 960
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "Output SQLite CREATE VIEW statement only.",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.1
+      }
+    },
+    {
+      "id": "execute_composite",
+      "type": "aiNode",
+      "position": {
+        "x": 1600,
+        "y": 1320
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "Output SQLite CREATE TABLE + ALTER TABLE + CREATE VIEW as needed.",
+        "maxTokens": 1000,
+        "model": "",
+        "temperature": 0.1
+      }
+    },
+    {
+      "id": "save_schema",
+      "type": "setGlobal",
+      "position": {
+        "x": 2540,
+        "y": 960
+      },
+      "data": {
+        "key": "resolved_schema",
+        "value": ""
+      }
+    },
+    {
+      "id": "schema_output",
+      "type": "output",
+      "position": {
+        "x": 2500,
+        "y": 60
+      },
+      "data": {
+        "label": "Schema Ready → Hand off to View Agent"
+      }
+    },
+    {
+      "id": "n116",
+      "type": "output",
+      "position": {
+        "x": 2180,
+        "y": -640
+      },
+      "data": {
+        "label": "Result"
+      }
+    },
+    {
+      "id": "n119",
+      "type": "output",
+      "position": {
+        "x": 2180,
+        "y": -180
+      },
+      "data": {
+        "label": "Schema Ready → Hand off to View Agent"
+      }
+    },
+    {
+      "id": "n123",
+      "type": "output",
+      "position": {
+        "x": 2300,
+        "y": 1280
+      },
+      "data": {
+        "label": "Schema Ready → Hand off to View Agent"
+      }
+    },
+    {
+      "id": "n127",
+      "type": "output",
+      "position": {
+        "x": 840,
+        "y": -520
+      },
+      "data": {
+        "label": "Result"
+      }
+    },
+    {
+      "id": "n120",
+      "type": "setGlobal",
+      "position": {
+        "x": -300,
+        "y": 320
+      },
+      "data": {
+        "key": "TABLES",
+        "value": ""
+      }
+    },
+    {
+      "id": "n123",
+      "type": "output",
+      "position": {
+        "x": 2300,
+        "y": 1280
+      },
+      "data": {
+        "label": "Schema Ready → Hand off to View Agent"
+      }
+    },
+    {
+      "id": "n125",
+      "type": "output",
+      "position": {
+        "x": 2360,
+        "y": 540
+      },
+      "data": {
+        "label": "Schema Ready → Hand off to View Agent"
+      }
+    },
+    {
+      "id": "n131",
+      "type": "output",
+      "position": {
+        "x": 2360,
+        "y": 760
+      },
+      "data": {
+        "label": "Schema Ready → Hand off to View Agent"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "user_prompt",
+      "sourceHandle": "out",
+      "target": "decision_prompt",
+      "targetHandle": "v:user_prompt"
+    },
+    {
+      "id": "e1a",
+      "source": "user_prompt",
+      "sourceHandle": "out",
+      "target": "analysis_prompt",
+      "targetHandle": "v:user_prompt"
+    },
+    {
+      "id": "e2",
+      "source": "registry_context",
+      "sourceHandle": "out",
+      "target": "decision_prompt",
+      "targetHandle": "v:registry_context"
+    },
+    {
+      "id": "e2a",
+      "source": "registry_context",
+      "sourceHandle": "out",
+      "target": "analysis_prompt",
+      "targetHandle": "v:registry_context"
+    },
+    {
+      "id": "e3",
+      "source": "db_agent_system",
+      "sourceHandle": "out",
+      "target": "decision_prompt",
+      "targetHandle": "v:db_agent_system"
+    },
+    {
+      "id": "e4",
+      "source": "decision_prompt",
+      "sourceHandle": "out",
+      "target": "db_agent",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e4a",
+      "source": "analysis_prompt",
+      "sourceHandle": "out",
+      "target": "needs_analysis",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e4b",
+      "source": "needs_analysis",
+      "sourceHandle": "out",
+      "target": "decision_prompt",
+      "targetHandle": "v:needs_analysis"
+    },
+    {
+      "id": "e5",
+      "source": "db_agent",
+      "sourceHandle": "out",
+      "target": "decision_branch",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e6",
+      "source": "decision_branch",
+      "sourceHandle": "b_create",
+      "target": "sql_prompt_create",
+      "targetHandle": "v:db_agent"
+    },
+    {
+      "id": "e7",
+      "source": "decision_branch",
+      "sourceHandle": "b_extend",
+      "target": "sql_prompt_extend",
+      "targetHandle": "v:db_agent"
+    },
+    {
+      "id": "e8",
+      "source": "decision_branch",
+      "sourceHandle": "b_join_union",
+      "target": "sql_prompt_join_union",
+      "targetHandle": "v:db_agent"
+    },
+    {
+      "id": "e9",
+      "source": "decision_branch",
+      "sourceHandle": "b_join_enrich",
+      "target": "sql_prompt_join_enrich",
+      "targetHandle": "v:db_agent"
+    },
+    {
+      "id": "e10",
+      "source": "decision_branch",
+      "sourceHandle": "b_join_aggregate",
+      "target": "sql_prompt_join_aggregate",
+      "targetHandle": "v:db_agent"
+    },
+    {
+      "id": "e11",
+      "source": "decision_branch",
+      "sourceHandle": "b_composite",
+      "target": "sql_prompt_composite",
+      "targetHandle": "v:db_agent"
+    },
+    {
+      "id": "e12",
+      "source": "sql_system",
+      "sourceHandle": "out",
+      "target": "sql_prompt_create",
+      "targetHandle": "v:sql_system"
+    },
+    {
+      "id": "e13",
+      "source": "sql_system",
+      "sourceHandle": "out",
+      "target": "sql_prompt_extend",
+      "targetHandle": "v:sql_system"
+    },
+    {
+      "id": "e15",
+      "source": "sql_system",
+      "sourceHandle": "out",
+      "target": "sql_prompt_join_union",
+      "targetHandle": "v:sql_system"
+    },
+    {
+      "id": "e16",
+      "source": "sql_system",
+      "sourceHandle": "out",
+      "target": "sql_prompt_join_enrich",
+      "targetHandle": "v:sql_system"
+    },
+    {
+      "id": "e17",
+      "source": "sql_system",
+      "sourceHandle": "out",
+      "target": "sql_prompt_join_aggregate",
+      "targetHandle": "v:sql_system"
+    },
+    {
+      "id": "e18",
+      "source": "sql_system",
+      "sourceHandle": "out",
+      "target": "sql_prompt_composite",
+      "targetHandle": "v:sql_system"
+    },
+    {
+      "id": "e19",
+      "source": "sql_prompt_create",
+      "sourceHandle": "out",
+      "target": "execute_create",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e20",
+      "source": "sql_prompt_extend",
+      "sourceHandle": "out",
+      "target": "execute_extend",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e22",
+      "source": "sql_prompt_join_union",
+      "sourceHandle": "out",
+      "target": "execute_join_union",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e23",
+      "source": "sql_prompt_join_enrich",
+      "sourceHandle": "out",
+      "target": "execute_join_enrich",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e24",
+      "source": "sql_prompt_join_aggregate",
+      "sourceHandle": "out",
+      "target": "execute_join_aggregate",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e25",
+      "source": "sql_prompt_composite",
+      "sourceHandle": "out",
+      "target": "execute_composite",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e26",
+      "source": "execute_create",
+      "sourceHandle": "out",
+      "target": "save_schema",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e27",
+      "source": "execute_extend",
+      "sourceHandle": "out",
+      "target": "save_schema",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e29",
+      "source": "execute_join_union",
+      "sourceHandle": "out",
+      "target": "save_schema",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e31",
+      "source": "execute_join_aggregate",
+      "sourceHandle": "out",
+      "target": "save_schema",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e32",
+      "source": "execute_composite",
+      "sourceHandle": "out",
+      "target": "save_schema",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e118",
+      "source": "execute_create",
+      "sourceHandle": "out",
+      "target": "n116",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e122",
+      "source": "execute_extend",
+      "sourceHandle": "out",
+      "target": "n119",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e126",
+      "source": "execute_composite",
+      "sourceHandle": "out",
+      "target": "n123",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e129",
+      "source": "db_agent",
+      "sourceHandle": "out",
+      "target": "n127",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e119",
+      "source": "execute_join_union",
+      "sourceHandle": "out",
+      "target": "schema_output",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e122",
+      "source": "registry_context",
+      "sourceHandle": "out",
+      "target": "n120",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e128",
+      "source": "execute_join_enrich",
+      "sourceHandle": "out",
+      "target": "save_schema",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e130",
+      "source": "execute_join_enrich",
+      "sourceHandle": "out",
+      "target": "n125",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e134",
+      "source": "execute_join_aggregate",
+      "sourceHandle": "out",
+      "target": "n131",
+      "targetHandle": "in"
+    }
+  ],
+  "gvars": {
+    "server_url": "http://localhost:8000/api/chat",
+    "prompt": "",
+    "resolved_schema": "",
+    "relationship_map": ""
+  }
+}

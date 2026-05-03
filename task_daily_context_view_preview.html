@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>task_daily_context View Preview</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; background: #f7f9fb; color: #111; }
+    h1 { color: #1f4e79; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: #fff; }
+    th, td { padding: 0.8rem 1rem; border: 1px solid #dde2ea; text-align: left; }
+    th { background: #eef3fb; color: #0b2a5a; }
+    tr:nth-child(even) { background: #f6f8fb; }
+    .note { margin-top: 1.5rem; padding: 1rem; background: #eef4fa; border-left: 4px solid #5b8df9; }
+  </style>
+</head>
+<body>
+  <h1>View: task_daily_context</h1>
+  <p>This preview shows the columns selected by the <code>task_daily_context</code> view and the table each column comes from.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Column</th>
+        <th>Source Table</th>
+        <th>Meaning</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>id</td><td>tasks</td><td>Task unique identifier</td></tr>
+      <tr><td>title</td><td>tasks</td><td>Task title</td></tr>
+      <tr><td>status</td><td>tasks</td><td>Task workflow status</td></tr>
+      <tr><td>priority</td><td>tasks</td><td>Task priority level</td></tr>
+      <tr><td>due_date</td><td>tasks</td><td>Task due date</td></tr>
+      <tr><td>assigned_to</td><td>tasks</td><td>Person assigned to the task</td></tr>
+      <tr><td>created_at</td><td>tasks</td><td>Task creation timestamp</td></tr>
+      <tr><td>energy_required</td><td>tasks</td><td>Energy needed to complete the task</td></tr>
+      <tr><td>mood</td><td>daily_checkins</td><td>Daily mood from the check-in</td></tr>
+      <tr><td>daily_goal</td><td>daily_checkins</td><td>Daily goal from the check-in</td></tr>
+      <tr><td>energy_level</td><td>daily_checkins</td><td>Current energy level from the check-in</td></tr>
+      <tr><td>event_title</td><td>events</td><td>Title of a linked event</td></tr>
+      <tr><td>start_time</td><td>events</td><td>Event start time</td></tr>
+      <tr><td>end_time</td><td>events</td><td>Event end time</td></tr>
+      <tr><td>location</td><td>events</td><td>Event location</td></tr>
+      <tr><td>session_title</td><td>focus_sessions</td><td>Title of a linked focus session</td></tr>
+      <tr><td>duration</td><td>focus_sessions</td><td>Focus session duration</td></tr>
+      <tr><td>session_energy</td><td>focus_sessions</td><td>Energy value for the session</td></tr>
+      <tr><td>session_notes</td><td>focus_sessions</td><td>Notes from the focus session</td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    <strong>Important notes:</strong>
+    <ul>
+      <li>This is a SQL <strong>view</strong>, not a new table.</li>
+      <li>It combines one task row with related daily check-in, event, and focus session rows.</li>
+      <li>If a task has multiple linked events or focus sessions, the view may return duplicate task rows.</li>
+    </ul>
+  </div>
+</body>
+</html>
