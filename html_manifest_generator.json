@@ -1,0 +1,101 @@
+{
+  "nodes": [
+    {
+      "id": "component_library",
+      "type": "textInput",
+      "position": {
+        "x": -740,
+        "y": 0
+      },
+      "data": {
+        "content": "AVAILABLE COMPONENT CLASSES (prefer over raw composition):\n\nLAYOUT (pick one for root):\n- page-form → data entry, single column\n- page-dashboard → overview, metrics\n- page-list → scrollable rows\n- page-detail → single object focus\n- page-split → list left, detail right\n\nCOMPONENTS (use before composition classes):\n- option-group → tactile button selector, never use <select> or number input for choices\n- rating-scale → visual numeric scale\n- duration-picker → duration with presets\n- progress-indicator → step tracker\n- capture-input → minimal friction single input\n- status-badge → visual status selector\n- action-button → primary CTA, anchored bottom\n\nCOMPOSITION CLASSES (fallback only):\n- flex-row / flex-col\n- gap-sm / gap-md / gap-lg\n- card / card-primary / card-ghost\n- text-title / text-muted / text-accent\n- btn-primary / btn-ghost\n- input / input-sm\n\nTRANSPORT PRIMITIVES (all JS must use these):\nwindow.__app.db.query(sql, params)\nwindow.__app.db.mutate(sql, params)\nwindow.__app.db.subscribe(query, callback)\nwindow.__app.ui.openAddon(name, props)\nwindow.__app.ui.navigate(route)\nwindow.__app.ui.notify(message, type)\nwindow.__app.sync.push(objectType, data)\nwindow.__app.sync.pull(objectType, filters)\nwindow.__app.actions.assignToUser(objectId, userId)\nwindow.__app.actions.updateStatus(objectId, status)\nwindow.__app.actions.setPriority(objectId, priority)\nwindow.__app.actions.scheduleToCalendar(objectId)\nwindow.__app.actions.addToPendingActions(objectId)\nwindow.__app.events.emit(name, payload)\nwindow.__app.events.on(name, callback)"
+      }
+    },
+    {
+      "id": "view_prompt",
+      "type": "promptBuilder",
+      "position": {
+        "x": -120,
+        "y": -20
+      },
+      "data": {
+        "template": "SYSTEM:\n{view_agent_system}\n\nCOMPONENT LIBRARY:\n{component_library}\n\nRESOLVED DATABASE SCHEMA:\n{resolved_schema}\n\nUSER REQUEST:\n{prompt}\n\nSYSTEM_PROMPT:\nYou are a UI generation agent. Output a single complete HTML file only. No explanation, no markdown, no backticks.\n\n\nGenerate a complete HTML file with inline CSS classes and a <script> block. The view must be fully wired to the schema above using window.__app primitives."
+      }
+    },
+    {
+      "id": "view_agent",
+      "type": "aiNode",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "data": {
+        "serverUrl": "{server_url}",
+        "systemPrompt": "You are a UI generation agent. Output a single complete HTML file only. No explanation, no markdown, no backticks.",
+        "maxTokens": 4000,
+        "model": "",
+        "temperature": 0.2
+      }
+    },
+    {
+      "id": "save_html",
+      "type": "setGlobal",
+      "position": {
+        "x": 820,
+        "y": -20
+      },
+      "data": {
+        "key": "generated_html",
+        "value": ""
+      }
+    },
+    {
+      "id": "view_output",
+      "type": "output",
+      "position": {
+        "x": 820,
+        "y": -240
+      },
+      "data": {
+        "label": "View Ready → Render in iframe"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e3",
+      "source": "component_library",
+      "sourceHandle": "out",
+      "target": "view_prompt",
+      "targetHandle": "v:component_library"
+    },
+    {
+      "id": "e5",
+      "source": "view_prompt",
+      "sourceHandle": "out",
+      "target": "view_agent",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e6",
+      "source": "view_agent",
+      "sourceHandle": "out",
+      "target": "save_html",
+      "targetHandle": "in"
+    },
+    {
+      "id": "e136",
+      "source": "view_agent",
+      "sourceHandle": "out",
+      "target": "view_output",
+      "targetHandle": "in"
+    }
+  ],
+  "gvars": {
+    "server_url": "http://localhost:8000/api/chat",
+    "prompt": " Create a view for me to track all of my cashflow",
+    "resolved_schema": "CREATE VIEW cashflow AS SELECT      id,     amount,     category,     description,     date,     person_id,     'expense' AS type FROM expenses UNION ALL SELECT      id,     monthly_cost AS amount,     category,     service_name AS description,     NULL AS date,     person_id,     'subscription' AS type FROM subscriptions;",
+    "generated_html": "",
+    "view_manifest": ""
+  }
+}

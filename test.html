@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --danger: #fb7185;
+            --success: #34d399;
+        }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text-main);
+        }
+        .page-dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            padding: 24px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .flex-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+        .flex-col { display: flex; flex-direction: column; }
+        .gap-sm { gap: 8px; }
+        .gap-md { gap: 16px; }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .card-primary {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-left: 4px solid var(--accent);
+        }
+
+        .text-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+        .text-muted { color: var(--text-muted); font-size: 14px; }
+        .text-accent { color: var(--accent); font-weight: 600; }
+        
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        .badge-expense { background: rgba(251, 113, 133, 0.1); color: var(--danger); border: 1px solid rgba(251, 113, 133, 0.2); }
+        .badge-subscription { background: rgba(56, 189, 248, 0.1); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.2); }
+
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .cashflow-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 12px;
+            transition: transform 0.1s;
+        }
+        .cashflow-item:active { transform: scale(0.98); }
+
+        .amount-text { font-family: monospace; font-size: 18px; font-weight: 600; }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .action-button {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: #000;
+            padding: 16px 32px;
+            border-radius: 30px;
+            font-weight: 700;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            border: none;
+            cursor: pointer;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+<div class="page-dashboard">
+    <div class="header">
+        <h1 class="text-title">Cashflow Overview</h1>
+        <p class="text-muted">Tracking monthly expenses and recurring subscriptions</p>
+    </div>
+
+    <div class="summary-grid">
+        <div class="card card-primary">
+            <div class="text-muted">Total Outflow</div>
+            <div class="text-title" id="total-outflow">$0.00</div>
+        </div>
+        <div class="card">
+            <div class="text-muted">Subscriptions</div>
+            <div class="text-title" id="total-subs" style="color: var(--accent)">$0.00</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="flex-row" style="margin-bottom: 20px;">
+            <h3 style="margin:0">Recent Transactions</h3>
+            <span class="text-muted" id="item-count">0 items</span>
+        </div>
+        
+        <div id="cashflow-list" class="list-container">
+            <div class="empty-state">Loading cashflow data...</div>
+        </div>
+    </div>
+</div>
+
+<button class="action-button" onclick="window.__app.ui.openAddon('add_expense')">
+    + Add Transaction
+</button>
+
+<script>
+    const listEl = document.getElementById('cashflow-list');
+    const totalOutflowEl = document.getElementById('total-outflow');
+    const totalSubsEl = document.getElementById('total-subs');
+    const itemCountEl = document.getElementById('item-count');
+
+    function formatCurrency(amt) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amt);
+    }
+
+    function renderCashflow(items) {
+        if (!items || items.length === 0) {
+            listEl.innerHTML = '<div class="empty-state">No transactions found.</div>';
+            totalOutflowEl.innerText = '$0.00';
+            totalSubsEl.innerText = '$0.00';
+            itemCountEl.innerText = '0 items';
+            return;
+        }
+
+        let totalOut = 0;
+        let totalSubs = 0;
+
+        listEl.innerHTML = items.map(item => {
+            totalOut += (item.amount || 0);
+            if (item.type === 'subscription') {
+                totalSubs += (item.amount || 0);
+            }
+
+            const badgeClass = item.type === 'expense' ? 'badge-expense' : 'badge-subscription';
+            const dateStr = item.date ? new Date(item.date).toLocaleDateString() : 'Monthly';
+
+            return `
+                <div class="cashflow-item" onclick="window.__app.ui.navigate('transaction_detail', {id: '${item.id}'})">
+                    <div class="flex-col gap-sm">
+                        <div class="flex-row gap-md">
+                            <span class="status-badge ${badgeClass}">${item.type}</span>
+                            <span style="font-weight: 600;">${item.description || 'Untitled'}</span>
+                        </div>
+                        <span class="text-muted">${item.category} • ${dateStr}</span>
+                    </div>
+                    <div class="amount-text">${formatCurrency(item.amount)}</div>
+                </div>
+            `;
+        }).join('');
+
+        totalOutflowEl.innerText = formatCurrency(totalOut);
+        totalSubsEl.innerText = formatCurrency(totalSubs);
+        itemCountEl.innerText = `${items.length} items`;
+    }
+
+    // Initialize Subscription to Data
+    function init() {
+        window.__app.db.subscribe(
+            "SELECT * FROM cashflow ORDER BY date DESC, description ASC",
+            (data) => {
+                renderCashflow(data);
+            }
+        );
+    }
+
+    // Start
+    document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
