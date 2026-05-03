@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --primary: #6366f1;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --positive: #22c55e;
+            --negative: #ef4444;
+            --border: #e2e8f0;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .page-dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .text-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 1.25rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .card-primary {
+            background: var(--primary);
+            color: white;
+            border: none;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .filter-tabs {
+            display: flex;
+            background: #e2e8f0;
+            padding: 4px;
+            border-radius: 8px;
+            gap: 4px;
+        }
+
+        .filter-btn {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .filter-btn.active {
+            background: white;
+            color: var(--text);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .flow-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .icon-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .icon-income { background: #dcfce7; color: #166534; }
+        .icon-expense { background: #fee2e2; color: #991b1b; }
+        .icon-subscription { background: #e0e7ff; color: #3730a3; }
+
+        .item-info { flex: 1; }
+        .item-desc { font-weight: 600; font-size: 1rem; margin-bottom: 2px; }
+        .item-meta { font-size: 0.8rem; color: var(--text-muted); }
+
+        .item-amount {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .amt-pos { color: var(--positive); }
+        .amt-neg { color: var(--negative); }
+
+        .action-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 99px;
+            font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+            cursor: pointer;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="page-dashboard">
+        <div class="header">
+            <h1 class="text-title">Cashflow Tracker</h1>
+            <div class="filter-tabs" id="type-filter">
+                <button class="filter-btn active" data-type="all">All</button>
+                <button class="filter-btn" data-type="income">Income</button>
+                <button class="filter-btn" data-type="expense">Expenses</button>
+                <button class="filter-btn" data-type="subscription">Subs</button>
+            </div>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="card">
+                <div class="metric-label">Monthly Income</div>
+                <div class="metric-value amt-pos" id="stat-income">$0.00</div>
+            </div>
+            <div class="card">
+                <div class="metric-label">Monthly Expenses</div>
+                <div class="metric-value amt-neg" id="stat-expenses">$0.00</div>
+            </div>
+            <div class="card card-primary">
+                <div class="metric-label">Net Flow</div>
+                <div class="metric-value" id="stat-net">$0.00</div>
+            </div>
+        </div>
+
+        <div class="list-container" id="flow-list">
+            <!-- Items injected here -->
+        </div>
+    </div>
+
+    <button class="action-button" onclick="addNewTransaction()">+ Add Transaction</button>
+
+    <script>
+        let currentFilter = 'all';
+
+        async function loadCashflow() {
+            const query = `SELECT * FROM cashflow_view ORDER BY date DESC, description ASC`;
+            
+            window.__app.db.subscribe(query, (data) => {
+                renderUI(data);
+            });
+        }
+
+        function renderUI(data) {
+            const list = document.getElementById('flow-list');
+            const statIncome = document.getElementById('stat-income');
+            const statExpenses = document.getElementById('stat-expenses');
+            const statNet = document.getElementById('stat-net');
+
+            let totalIncome = 0;
+            let totalOut = 0;
+
+            const filteredData = data.filter(item => {
+                if (item.type === 'income') totalIncome += item.amount;
+                else totalOut += item.amount;
+
+                if (currentFilter === 'all') return true;
+                return item.type === currentFilter;
+            });
+
+            statIncome.textContent = formatCurrency(totalIncome);
+            statExpenses.textContent = formatCurrency(totalOut);
+            statNet.textContent = formatCurrency(totalIncome - totalOut);
+
+            if (filteredData.length === 0) {
+                list.innerHTML = `<div class="empty-state">No transactions found for this view</div>`;
+                return;
+            }
+
+            list.innerHTML = filteredData.map(item => `
+                <div class="flow-item">
+                    <div class="icon-box icon-${item.type}">
+                        ${item.type[0].toUpperCase()}
+                    </div>
+                    <div class="item-info">
+                        <div class="item-desc">${item.description}</div>
+                        <div class="item-meta">
+                            ${item.person_name || 'Personal'} • ${item.date || 'Monthly'}
+                        </div>
+                    </div>
+                    <div class="item-amount ${item.type === 'income' ? 'amt-pos' : 'amt-neg'}">
+                        ${item.type === 'income' ? '+' : '-'}${formatCurrency(item.amount)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function formatCurrency(val) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(Math.abs(val));
+        }
+
+        function addNewTransaction() {
+            // In a real app, this would navigate to a form
+            window.__app.ui.notify('Use the specific Add Income or Add Expense views to record data.', 'info');
+        }
+
+        // Initialize Filter Listeners
+        document.getElementById('type-filter').addEventListener('click', (e) => {
+            if (e.target.classList.contains('filter-btn')) {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentFilter = e.target.dataset.type;
+                // Re-fetch or re-filter
+                window.__app.db.query(`SELECT * FROM cashflow_view ORDER BY date DESC`).then(renderUI);
+            }
+        });
+
+        // Start App
+        loadCashflow();
+    </script>
+</body>
+</html>

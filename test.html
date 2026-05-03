@@ -5,205 +5,212 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         :root {
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent: #38bdf8;
-            --danger: #fb7185;
-            --success: #34d399;
-        }
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg);
-            color: var(--text-main);
-        }
-        .page-dashboard {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-            padding: 24px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .flex-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
-        .flex-col { display: flex; flex-direction: column; }
-        .gap-sm { gap: 8px; }
-        .gap-md { gap: 16px; }
-        
-        .card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 20px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-        
-        .card-primary {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            border-left: 4px solid var(--accent);
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --primary: #3b82f6;
+            --text: #1e293b;
+            --muted: #64748b;
+            --income: #10b981;
+            --expense: #ef4444;
+            --sub: #8b5cf6;
+            --border: #e2e8f0;
         }
 
-        .text-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
-        .text-muted { color: var(--text-muted); font-size: 14px; }
-        .text-accent { color: var(--accent); font-weight: 600; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
         
-        .status-badge {
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            text-transform: uppercase;
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
-        .badge-expense { background: rgba(251, 113, 133, 0.1); color: var(--danger); border: 1px solid rgba(251, 113, 133, 0.2); }
-        .badge-subscription { background: rgba(56, 189, 248, 0.1); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.2); }
-
-        .list-container {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .cashflow-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px;
-            background: rgba(255,255,255,0.02);
-            border-radius: 12px;
+        .page-dashboard { display: flex; flex-direction: column; gap: 20px; padding: 20px; max-width: 1000px; margin: 0 auto; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .card { background: var(--card); border: 1px solid var(--border); padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card-primary { background: var(--primary); color: white; }
+        
+        .text-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
+        .text-muted { font-size: 0.875rem; color: var(--muted); }
+        .text-accent { font-weight: 600; font-size: 1.1rem; }
+        
+        .list-container { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+        .cashflow-item { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            padding: 12px 16px; 
+            background: var(--card); 
+            border-radius: 8px; 
+            border: 1px solid var(--border);
             transition: transform 0.1s;
         }
-        .cashflow-item:active { transform: scale(0.98); }
-
-        .amount-text { font-family: monospace; font-size: 18px; font-weight: 600; }
+        .cashflow-item:active { transform: scale(0.99); }
         
-        .summary-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
+        .badge { 
+            padding: 4px 8px; 
+            border-radius: 6px; 
+            font-size: 0.75rem; 
+            font-weight: 600; 
+            text-transform: uppercase; 
         }
-
-        .empty-state {
-            padding: 40px;
-            text-align: center;
-            color: var(--text-muted);
+        .badge-income { background: #d1fae5; color: #065f46; }
+        .badge-expense { background: #fee2e2; color: #991b1b; }
+        .badge-subscription { background: #ede9fe; color: #5b21b6; }
+        
+        .amount-pos { color: var(--income); font-weight: 700; }
+        .amount-neg { color: var(--expense); font-weight: 700; }
+        
+        .controls { display: flex; gap: 12px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 8px; }
+        .option-group { display: flex; background: #e2e8f0; padding: 4px; border-radius: 10px; }
+        .option-item { 
+            padding: 8px 16px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 0.875rem;
+            font-weight: 500;
         }
+        .option-item.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
-        .action-button {
+        .fab {
             position: fixed;
             bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--accent);
-            color: #000;
-            padding: 16px 32px;
-            border-radius: 30px;
-            font-weight: 700;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-            border: none;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
             cursor: pointer;
-            z-index: 100;
+            font-size: 24px;
         }
     </style>
 </head>
 <body>
 
 <div class="page-dashboard">
-    <div class="header">
+    <header>
         <h1 class="text-title">Cashflow Overview</h1>
-        <p class="text-muted">Tracking monthly expenses and recurring subscriptions</p>
-    </div>
+        <p class="text-muted">Tracking your income, expenses, and active subscriptions</p>
+    </header>
 
-    <div class="summary-grid">
-        <div class="card card-primary">
-            <div class="text-muted">Total Outflow</div>
-            <div class="text-title" id="total-outflow">$0.00</div>
+    <div class="stats-grid">
+        <div class="card">
+            <div class="text-muted">Net Cashflow</div>
+            <div class="text-accent" id="stat-net">$0.00</div>
         </div>
         <div class="card">
-            <div class="text-muted">Subscriptions</div>
-            <div class="text-title" id="total-subs" style="color: var(--accent)">$0.00</div>
+            <div class="text-muted">Monthly Income</div>
+            <div class="text-accent" style="color: var(--income)" id="stat-income">$0.00</div>
+        </div>
+        <div class="card">
+            <div class="text-muted">Monthly Burn</div>
+            <div class="text-accent" style="color: var(--expense)" id="stat-expenses">$0.00</div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="flex-row" style="margin-bottom: 20px;">
-            <h3 style="margin:0">Recent Transactions</h3>
-            <span class="text-muted" id="item-count">0 items</span>
+    <div class="controls">
+        <div class="option-group" id="filter-group">
+            <div class="option-item active" data-filter="all">All</div>
+            <div class="option-item" data-filter="income">Income</div>
+            <div class="option-item" data-filter="expense">Expense</div>
+            <div class="option-item" data-filter="subscription">Subs</div>
         </div>
-        
-        <div id="cashflow-list" class="list-container">
-            <div class="empty-state">Loading cashflow data...</div>
-        </div>
+    </div>
+
+    <div class="list-container" id="cashflow-list">
+        <!-- Items injected here -->
     </div>
 </div>
 
-<button class="action-button" onclick="window.__app.ui.openAddon('add_expense')">
-    + Add Transaction
-</button>
+<div class="fab" onclick="window.__app.ui.navigate('add-transaction')">+</div>
 
 <script>
-    const listEl = document.getElementById('cashflow-list');
-    const totalOutflowEl = document.getElementById('total-outflow');
-    const totalSubsEl = document.getElementById('total-subs');
-    const itemCountEl = document.getElementById('item-count');
+    const state = {
+        filter: 'all',
+        data: []
+    };
+
+    async function init() {
+        render();
+        subscribeToCashflow();
+    }
+
+    function subscribeToCashflow() {
+        const query = `SELECT * FROM cashflow_view ORDER BY date DESC, id DESC`;
+        window.__app.db.subscribe(query, (results) => {
+            state.data = results;
+            updateStats();
+            render();
+        });
+    }
+
+    function updateStats() {
+        let income = 0;
+        let expense = 0;
+
+        state.data.forEach(item => {
+            if (item.type === 'income') {
+                income += item.amount;
+            } else {
+                expense += item.amount;
+            }
+        });
+
+        document.getElementById('stat-net').textContent = formatCurrency(income - expense);
+        document.getElementById('stat-income').textContent = formatCurrency(income);
+        document.getElementById('stat-expenses').textContent = formatCurrency(expense);
+    }
 
     function formatCurrency(amt) {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amt);
     }
 
-    function renderCashflow(items) {
-        if (!items || items.length === 0) {
-            listEl.innerHTML = '<div class="empty-state">No transactions found.</div>';
-            totalOutflowEl.innerText = '$0.00';
-            totalSubsEl.innerText = '$0.00';
-            itemCountEl.innerText = '0 items';
-            return;
-        }
+    function formatDate(dateStr) {
+        if (!dateStr) return 'Recurring';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
 
-        let totalOut = 0;
-        let totalSubs = 0;
+    function render() {
+        const list = document.getElementById('cashflow-list');
+        const filtered = state.filter === 'all' 
+            ? state.data 
+            : state.data.filter(i => i.type === state.filter);
 
-        listEl.innerHTML = items.map(item => {
-            totalOut += (item.amount || 0);
-            if (item.type === 'subscription') {
-                totalSubs += (item.amount || 0);
-            }
-
-            const badgeClass = item.type === 'expense' ? 'badge-expense' : 'badge-subscription';
-            const dateStr = item.date ? new Date(item.date).toLocaleDateString() : 'Monthly';
-
-            return `
-                <div class="cashflow-item" onclick="window.__app.ui.navigate('transaction_detail', {id: '${item.id}'})">
-                    <div class="flex-col gap-sm">
-                        <div class="flex-row gap-md">
-                            <span class="status-badge ${badgeClass}">${item.type}</span>
-                            <span style="font-weight: 600;">${item.description || 'Untitled'}</span>
-                        </div>
-                        <span class="text-muted">${item.category} • ${dateStr}</span>
+        list.innerHTML = filtered.map(item => `
+            <div class="cashflow-item" onclick="window.__app.ui.navigate('detail/${item.type}/${item.id}')">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="badge badge-${item.type}">${item.type}</span>
+                        <span style="font-weight: 500;">${item.description}</span>
                     </div>
-                    <div class="amount-text">${formatCurrency(item.amount)}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">
+                        ${item.person_name || 'Personal'} • ${formatDate(item.date)}
+                    </div>
                 </div>
-            `;
-        }).join('');
+                <div class="${item.type === 'income' ? 'amount-pos' : 'amount-neg'}">
+                    ${item.type === 'income' ? '+' : '-'}${formatCurrency(item.amount)}
+                </div>
+            </div>
+        `).join('');
 
-        totalOutflowEl.innerText = formatCurrency(totalOut);
-        totalSubsEl.innerText = formatCurrency(totalSubs);
-        itemCountEl.innerText = `${items.length} items`;
+        if (filtered.length === 0) {
+            list.innerHTML = `<div class="card-ghost" style="text-align: center; padding: 40px; color: var(--muted);">No transactions found</div>`;
+        }
     }
 
-    // Initialize Subscription to Data
-    function init() {
-        window.__app.db.subscribe(
-            "SELECT * FROM cashflow ORDER BY date DESC, description ASC",
-            (data) => {
-                renderCashflow(data);
-            }
-        );
-    }
+    // Filter Logic
+    document.getElementById('filter-group').addEventListener('click', (e) => {
+        const target = e.target.closest('.option-item');
+        if (!target) return;
 
-    // Start
-    document.addEventListener('DOMContentLoaded', init);
+        document.querySelectorAll('.option-item').forEach(el => el.classList.remove('active'));
+        target.classList.add('active');
+        
+        state.filter = target.dataset.filter;
+        render();
+    });
+
+    init();
 </script>
 
 </body>
