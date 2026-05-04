@@ -13,6 +13,8 @@ const HEADER_H = 42;
 const PORT_R   = 6;
 const GRID     = 20;
 
+const FALLBACK_NODE_META = { label: "Unknown", icon: "?", color: "#64748b" };
+
 // ══════════════════════════════════════════════════════
 // NODE CONTENT RENDERERS
 // ══════════════════════════════════════════════════════
@@ -21,7 +23,7 @@ const GRID     = 20;
 // FLOW NODE
 // ══════════════════════════════════════════════════════
 function FlowNode({ node, selected, status, result, onSelect, onDragStart, onPortDown, onPortUp, onDataChange, onDelete, onDuplicate, defaultModel }) {
-  const meta = TYPE_META[node.type];
+  const meta = TYPE_META[node.type] || FALLBACK_NODE_META;
   const color = meta.color;
   const { inputs, outputs } = getPorts(node);
   const h = nodeHeight(node, result);
@@ -452,7 +454,8 @@ export default function FlowForge() {
     const [x1, y1, x2, y2] = conn.side === "out"
       ? [sp.x, sp.y, mouse.x, mouse.y]
       : [mouse.x, mouse.y, sp.x, sp.y];
-    return { d: bezier(x1, y1, x2, y2), color: TYPE_META[n.type].color };
+    const meta = TYPE_META[n.type] || FALLBACK_NODE_META;
+    return { d: bezier(x1, y1, x2, y2), color: meta.color };
   })() : null;
 
   // Grid
@@ -566,7 +569,8 @@ export default function FlowForge() {
                   if (!sn || !tn) return null;
                   const sp = portXY(sn, edge.sourceHandle, "out", nodeResult[sn.id]);
                   const tp = portXY(tn, edge.targetHandle, "in", nodeResult[tn.id]);
-                  const c = TYPE_META[sn.type].color;
+                  const sourceMeta = TYPE_META[sn.type] || FALLBACK_NODE_META;
+                  const c = sourceMeta.color;
                   const active = nodeStatus[sn.id] === "done";
                   const d = bezier(sp.x, sp.y, tp.x, tp.y);
                   return (
