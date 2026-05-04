@@ -1,217 +1,181 @@
-<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         :root {
             --bg: #f8fafc;
             --card: #ffffff;
-            --primary: #3b82f6;
+            --primary: #2563eb;
             --text: #1e293b;
             --muted: #64748b;
-            --income: #10b981;
-            --expense: #ef4444;
-            --sub: #8b5cf6;
+            --success: #22c55e;
+            --danger: #ef4444;
             --border: #e2e8f0;
         }
-
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; }
-        
-        .page-dashboard { display: flex; flex-direction: column; gap: 20px; padding: 20px; max-width: 1000px; margin: 0 auto; }
-        
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
-        .card { background: var(--card); border: 1px solid var(--border); padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+        .page-dashboard { display: flex; flex-direction: column; gap: 24px; padding: 24px; max-width: 1000px; margin: 0 auto; padding-bottom: 100px; }
+        .flex-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; }
+        .flex-col { display: flex; flex-direction: column; gap: 8px; }
+        .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .card-primary { background: var(--primary); color: white; }
-        
-        .text-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
-        .text-muted { font-size: 0.875rem; color: var(--muted); }
-        .text-accent { font-weight: 600; font-size: 1.1rem; }
-        
-        .list-container { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
-        .cashflow-item { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            padding: 12px 16px; 
-            background: var(--card); 
-            border-radius: 8px; 
-            border: 1px solid var(--border);
-            transition: transform 0.1s;
-        }
-        .cashflow-item:active { transform: scale(0.99); }
-        
-        .badge { 
-            padding: 4px 8px; 
-            border-radius: 6px; 
-            font-size: 0.75rem; 
-            font-weight: 600; 
-            text-transform: uppercase; 
-        }
-        .badge-income { background: #d1fae5; color: #065f46; }
+        .text-title { font-size: 24px; font-weight: 700; margin: 0; }
+        .text-subtitle { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+        .text-muted { color: var(--muted); font-size: 14px; }
+        .text-accent { font-weight: 700; font-size: 20px; }
+        .amount-pos { color: var(--success); }
+        .amount-neg { color: var(--danger); }
+        .list-container { display: flex; flex-direction: column; gap: 12px; }
+        .cashflow-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--card); border-radius: 8px; border: 1px solid var(--border); }
+        .status-badge { padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+        .badge-income { background: #dcfce7; color: #166534; }
         .badge-expense { background: #fee2e2; color: #991b1b; }
-        .badge-subscription { background: #ede9fe; color: #5b21b6; }
-        
-        .amount-pos { color: var(--income); font-weight: 700; }
-        .amount-neg { color: var(--expense); font-weight: 700; }
-        
-        .controls { display: flex; gap: 12px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 8px; }
-        .option-group { display: flex; background: #e2e8f0; padding: 4px; border-radius: 10px; }
-        .option-item { 
-            padding: 8px 16px; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        .option-item.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-        .fab {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 56px;
-            height: 56px;
-            border-radius: 28px;
-            background: var(--primary);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-            cursor: pointer;
-            font-size: 24px;
-        }
+        .badge-subscription { background: #dbeafe; color: #1e40af; }
+        .action-button { position: fixed; bottom: 24px; right: 24px; background: var(--primary); color: white; padding: 16px 24px; border-radius: 99px; border: none; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); display: flex; align-items: center; gap: 8px; }
+        .filter-tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+        .tab { padding: 8px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; border: 1px solid var(--border); background: var(--card); }
+        .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
     </style>
 </head>
 <body>
+    <div class="page-dashboard">
+        <header class="flex-row">
+            <h1 class="text-title">Cashflow Tracker</h1>
+            <div class="status-badge" style="background: white; border: 1px solid var(--border);">Live Updates</div>
+        </header>
 
-<div class="page-dashboard">
-    <header>
-        <h1 class="text-title">Cashflow Overview</h1>
-        <p class="text-muted">Tracking your income, expenses, and active subscriptions</p>
-    </header>
-
-    <div class="stats-grid">
-        <div class="card">
-            <div class="text-muted">Net Cashflow</div>
-            <div class="text-accent" id="stat-net">$0.00</div>
+        <div class="grid-stats">
+            <div class="card">
+                <div class="text-subtitle">Total Inflow</div>
+                <div class="text-accent amount-pos" id="stat-income">$0.00</div>
+            </div>
+            <div class="card">
+                <div class="text-subtitle">Total Outflow</div>
+                <div class="text-accent amount-neg" id="stat-expense">$0.00</div>
+            </div>
+            <div class="card card-primary">
+                <div class="text-subtitle" style="color: rgba(255,255,255,0.8)">Net Balance</div>
+                <div class="text-accent" id="stat-net">$0.00</div>
+            </div>
         </div>
-        <div class="card">
-            <div class="text-muted">Monthly Income</div>
-            <div class="text-accent" style="color: var(--income)" id="stat-income">$0.00</div>
-        </div>
-        <div class="card">
-            <div class="text-muted">Monthly Burn</div>
-            <div class="text-accent" style="color: var(--expense)" id="stat-expenses">$0.00</div>
-        </div>
-    </div>
 
-    <div class="controls">
-        <div class="option-group" id="filter-group">
-            <div class="option-item active" data-filter="all">All</div>
-            <div class="option-item" data-filter="income">Income</div>
-            <div class="option-item" data-filter="expense">Expense</div>
-            <div class="option-item" data-filter="subscription">Subs</div>
-        </div>
-    </div>
-
-    <div class="list-container" id="cashflow-list">
-        <!-- Items injected here -->
-    </div>
-</div>
-
-<div class="fab" onclick="window.__app.ui.navigate('add-transaction')">+</div>
-
-<script>
-    const state = {
-        filter: 'all',
-        data: []
-    };
-
-    async function init() {
-        render();
-        subscribeToCashflow();
-    }
-
-    function subscribeToCashflow() {
-        const query = `SELECT * FROM cashflow_view ORDER BY date DESC, id DESC`;
-        window.__app.db.subscribe(query, (results) => {
-            state.data = results;
-            updateStats();
-            render();
-        });
-    }
-
-    function updateStats() {
-        let income = 0;
-        let expense = 0;
-
-        state.data.forEach(item => {
-            if (item.type === 'income') {
-                income += item.amount;
-            } else {
-                expense += item.amount;
-            }
-        });
-
-        document.getElementById('stat-net').textContent = formatCurrency(income - expense);
-        document.getElementById('stat-income').textContent = formatCurrency(income);
-        document.getElementById('stat-expenses').textContent = formatCurrency(expense);
-    }
-
-    function formatCurrency(amt) {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amt);
-    }
-
-    function formatDate(dateStr) {
-        if (!dateStr) return 'Recurring';
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
-
-    function render() {
-        const list = document.getElementById('cashflow-list');
-        const filtered = state.filter === 'all' 
-            ? state.data 
-            : state.data.filter(i => i.type === state.filter);
-
-        list.innerHTML = filtered.map(item => `
-            <div class="cashflow-item" onclick="window.__app.ui.navigate('detail/${item.type}/${item.id}')">
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span class="badge badge-${item.type}">${item.type}</span>
-                        <span style="font-weight: 500;">${item.description}</span>
-                    </div>
-                    <div class="text-muted" style="font-size: 0.75rem;">
-                        ${item.person_name || 'Personal'} • ${formatDate(item.date)}
-                    </div>
-                </div>
-                <div class="${item.type === 'income' ? 'amount-pos' : 'amount-neg'}">
-                    ${item.type === 'income' ? '+' : '-'}${formatCurrency(item.amount)}
+        <div class="flex-col">
+            <div class="flex-row">
+                <h2 class="text-subtitle">Recent Transactions</h2>
+                <div class="filter-tabs">
+                    <div class="tab active" onclick="setFilter('all')">All</div>
+                    <div class="tab" onclick="setFilter('income')">Income</div>
+                    <div class="tab" onclick="setFilter('expense')">Expenses</div>
+                    <div class="tab" onclick="setFilter('subscription')">Subs</div>
                 </div>
             </div>
-        `).join('');
+            <div id="cashflow-list" class="list-container">
+                <!-- List items injected here -->
+            </div>
+        </div>
+    </div>
 
-        if (filtered.length === 0) {
-            list.innerHTML = `<div class="card-ghost" style="text-align: center; padding: 40px; color: var(--muted);">No transactions found</div>`;
+    <button class="action-button" onclick="addNewTransaction()">
+        <span>+</span> New Transaction
+    </button>
+
+    <script>
+        let currentFilter = 'all';
+
+        async function refreshData() {
+            const query = `SELECT * FROM cashflow_view ORDER BY date DESC, id DESC`;
+            const data = await window.__app.db.query(query);
+            renderStats(data);
+            renderList(data);
         }
-    }
 
-    // Filter Logic
-    document.getElementById('filter-group').addEventListener('click', (e) => {
-        const target = e.target.closest('.option-item');
-        if (!target) return;
+        function renderStats(data) {
+            let income = 0;
+            let expense = 0;
+            
+            data.forEach(item => {
+                const amt = parseFloat(item.amount) || 0;
+                if (item.type === 'income') {
+                    income += amt;
+                } else {
+                    expense += amt;
+                }
+            });
 
-        document.querySelectorAll('.option-item').forEach(el => el.classList.remove('active'));
-        target.classList.add('active');
-        
-        state.filter = target.dataset.filter;
-        render();
-    });
+            document.getElementById('stat-income').innerText = `$${income.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            document.getElementById('stat-expense').innerText = `-$${expense.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            document.getElementById('stat-net').innerText = `$${(income - expense).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        }
 
-    init();
-</script>
+        function renderList(data) {
+            const list = document.getElementById('cashflow-list');
+            list.innerHTML = '';
 
+            const filteredData = currentFilter === 'all' 
+                ? data 
+                : data.filter(item => item.type === currentFilter);
+
+            if (filteredData.length === 0) {
+                list.innerHTML = `<div class="card" style="text-align: center; color: var(--muted);">No transactions found</div>`;
+                return;
+            }
+
+            filteredData.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'cashflow-item';
+                const isPositive = item.type === 'income';
+                
+                div.innerHTML = `
+                    <div class="flex-col">
+                        <div style="font-weight: 600;">${item.description}</div>
+                        <div class="text-muted" style="font-size: 12px;">
+                            ${item.date ? new Date(item.date).toLocaleDateString() : 'Monthly Subscription'} • ${item.person_name || 'Personal'}
+                        </div>
+                    </div>
+                    <div class="flex-row" style="gap: 16px;">
+                        <span class="status-badge badge-${item.type}">${item.type}</span>
+                        <span style="font-weight: 700; width: 100px; text-align: right;" class="${isPositive ? 'amount-pos' : 'amount-neg'}">
+                            ${isPositive ? '+' : '-'}$${parseFloat(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        </span>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.tab').forEach(t => {
+                t.classList.toggle('active', t.innerText.toLowerCase().includes(filter));
+            });
+            refreshData();
+        }
+
+        async function addNewTransaction() {
+            // Simplified entry logic for demo purposes - usually would trigger a modal or form page
+            const type = confirm("Press OK for Income, Cancel for Expense") ? 'income' : 'expense';
+            const amount = prompt("Enter amount:");
+            const description = prompt("Enter description:");
+            
+            if (amount && description) {
+                const table = type === 'income' ? 'income' : 'expenses';
+                const date = new Date().toISOString().split('T')[0];
+                
+                await window.__app.db.mutate(
+                    `INSERT INTO ${table} (amount, ${type === 'income' ? 'source' : 'description'}, date) VALUES (?, ?, ?)`,
+                    [parseFloat(amount), description, date]
+                );
+                
+                window.__app.ui.notify(`${type.charAt(0).toUpperCase() + type.slice(1)} recorded successfully`, "success");
+                refreshData();
+            }
+        }
+
+        // Initialize and subscribe
+        refreshData();
+        window.__app.db.subscribe("SELECT count(*) FROM cashflow_view", () => {
+            refreshData();
+        });
+
+    </script>
 </body>
 </html>
